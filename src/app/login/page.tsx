@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icons';
 import { LogoFull } from '@/components/layout/Logo';
 import { adminApi } from '@/lib/api';
 import { setToken, setStoredUser, isAuthenticated } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,14 +26,26 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await adminApi.login(email, pw);
-      setToken(data.token);
-      setStoredUser(data.user);
-      if (remember) {
-        document.cookie = `vja_admin_token=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict`;
+      let token: string;
+      let user: { email: string; name: string };
+
+      if (supabase) {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password: pw });
+        if (authError || !data.session) {
+          throw new Error(authError?.message || 'invalid_credentials');
+        }
+        token = data.session.access_token;
+        user = { email: data.user.email ?? email, name: (data.user.user_metadata?.name as string) ?? email };
       } else {
-        document.cookie = `vja_admin_token=${data.token}; path=/; SameSite=Strict`;
+        const data = await adminApi.login(email, pw);
+        token = data.token;
+        user = data.user;
       }
+
+      setToken(token);
+      setStoredUser(user);
+      const maxAge = remember ? `; max-age=${60 * 60 * 24 * 7}` : '';
+      document.cookie = `vja_admin_token=${token}; path=/${maxAge}; SameSite=Strict`;
       router.push('/admin/dashboard');
     } catch {
       setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
