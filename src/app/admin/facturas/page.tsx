@@ -7,7 +7,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { ECF_TYPES, fmtNum, fmtDOP, fmtDateTime } from '@/lib/data';
-import { getFacturas } from '@/lib/data-layer';
+import { getFacturas, exportCSV } from '@/lib/data-layer';
 import type { Factura } from '@/types';
 
 export default function FacturasPage() {
@@ -60,6 +60,39 @@ export default function FacturasPage() {
     setPage(1);
   };
 
+  const handleExportCSV = () => {
+    const csvRows = filtered.map((f) => ({
+      eNCF: f.encf,
+      Tipo: f.tipo,
+      Cliente: f.cliente,
+      RNC: f.rnc,
+      Monto: f.monto,
+      ITBIS: f.itbis,
+      Total: f.total,
+      Estado: f.estado,
+      Fecha: f.fecha instanceof Date ? f.fecha.toISOString() : String(f.fecha),
+    }));
+    exportCSV(csvRows as unknown as Record<string, unknown>[], `facturas_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  const handleVerXml = async (f: Factura) => {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
+    const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
+    try {
+      const res = await fetch(`${API_BASE}/admin/ecf/${f.id}/xml`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const xml = await res.text();
+      const w = window.open('', '_blank');
+      if (w) { w.document.write('<pre>' + xml.replace(/</g, '&lt;') + '</pre>'); }
+    } catch {
+      toast('API no disponible — XML no accesible en este momento');
+    }
+  };
+
+  const mesActual = new Intl.DateTimeFormat('es-DO', { month: 'long', year: 'numeric' }).format(new Date());
+
   if (loading) {
     return (
       <div className="content-wrap">
@@ -78,8 +111,8 @@ export default function FacturasPage() {
           <p>Todos los comprobantes e-CF emitidos en la plataforma</p>
         </div>
         <div className="page-head-actions">
-          <button className="btn"><Icon name="calendar" />Junio 2026</button>
-          <button className="btn"><Icon name="download" />Exportar</button>
+          <button className="btn"><Icon name="calendar" />{mesActual.charAt(0).toUpperCase() + mesActual.slice(1)}</button>
+          <button className="btn" onClick={handleExportCSV}><Icon name="download" />Exportar CSV</button>
         </div>
       </div>
 
@@ -127,51 +160,57 @@ export default function FacturasPage() {
           </span>
         </div>
 
-        <div className="table-wrap">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>eNCF</th><th>Tipo</th><th>Cliente</th>
-                <th className="num">Monto</th><th className="num">ITBIS</th>
-                <th>Fecha</th><th>Estado</th>
-                <th style={{ textAlign: 'right' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((f) => (
-                <tr key={f.id}>
-                  <td className="mono strong">{f.encf}</td>
-                  <td><span className="tag-type">{f.tipo}</span></td>
-                  <td>
-                    <div className="cell-main">
-                      <b style={{ fontSize: 12.5 }}>
-                        {f.cliente.length > 22 ? f.cliente.slice(0, 22) + '…' : f.cliente}
-                      </b>
-                      <span className="mono">{f.rnc}</span>
-                    </div>
-                  </td>
-                  <td className="num strong">${fmtDOP(f.monto)}</td>
-                  <td className="num muted">${fmtDOP(f.itbis)}</td>
-                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(f.fecha)}</td>
-                  <td><EstadoBadge estado={f.estado} /></td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="ra" title="Ver XML" onClick={() => toast('XML del e-CF ' + f.encf)}>
-                        <Icon name="code" />
-                      </button>
-                      <button className="ra" title="Ver PDF" onClick={() => toast('Representación impresa (PDF)')}>
-                        <Icon name="file" />
-                      </button>
-                      <button className="ra" title="Estado DGII" onClick={() => toast('Consultando estado en DGII…')}>
-                        <Icon name="globe" />
-                      </button>
-                    </div>
-                  </td>
+        {rows.length === 0 ? (
+          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
+            {facturas.length === 0 ? 'No hay facturas registradas en el sistema' : 'Sin resultados para los filtros aplicados'}
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>eNCF</th><th>Tipo</th><th>Cliente</th>
+                  <th className="num">Monto</th><th className="num">ITBIS</th>
+                  <th>Fecha</th><th>Estado</th>
+                  <th style={{ textAlign: 'right' }}>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((f) => (
+                  <tr key={f.id}>
+                    <td className="mono strong">{f.encf}</td>
+                    <td><span className="tag-type">{f.tipo}</span></td>
+                    <td>
+                      <div className="cell-main">
+                        <b style={{ fontSize: 12.5 }}>
+                          {f.cliente.length > 22 ? f.cliente.slice(0, 22) + '…' : f.cliente}
+                        </b>
+                        <span className="mono">{f.rnc}</span>
+                      </div>
+                    </td>
+                    <td className="num strong">${fmtDOP(f.monto)}</td>
+                    <td className="num muted">${fmtDOP(f.itbis)}</td>
+                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(f.fecha)}</td>
+                    <td><EstadoBadge estado={f.estado} /></td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="ra" title="Ver XML" onClick={() => handleVerXml(f)}>
+                          <Icon name="code" />
+                        </button>
+                        <button className="ra" title="Ver PDF" onClick={() => toast('PDF no disponible en el API actual')}>
+                          <Icon name="file" />
+                        </button>
+                        <button className="ra" title="Estado DGII" onClick={() => toast('Consultando estado en DGII…')}>
+                          <Icon name="globe" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <Pagination page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} />
       </div>

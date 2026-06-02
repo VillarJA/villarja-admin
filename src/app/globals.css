@@ -335,6 +335,9 @@ table.tbl .strong { color: var(--text); font-weight: 600; }
 /* Config */
 .cfg-inp { width: 240px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); padding: 9px 12px; border-radius: 9px; font-size: 13px; outline: none; transition: border .13s, box-shadow .13s; }
 .cfg-inp:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(166,0,5,0.1); }
+.cfg-inp.w-full, form .cfg-inp, .modal-form .cfg-inp { width: 100%; box-sizing: border-box; }
+select.cfg-inp { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
+.cfg-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-2); margin-bottom: 5px; }
 
 /* Services */
 .svc-list { display: flex; flex-direction: column; }

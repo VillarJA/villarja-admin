@@ -7,9 +7,15 @@ import { Badge, EstadoBadge, PlanPill } from '@/components/ui/Badge';
 import { CoMark } from '@/components/ui/CoMark';
 import { useToast } from '@/components/ui/Toast';
 import { PLAN_LIMITS, ECF_TYPES, fmtNum, fmtDOP, fmtDateTime } from '@/lib/data';
-import { getClienteById, getFacturasForCliente, getSecuencias } from '@/lib/data-layer';
-import { adminApi } from '@/lib/api';
+import {
+  getClienteById, getFacturasForCliente, getSecuencias,
+  regenerateApiKey, updateCompanyEstado,
+} from '@/lib/data-layer';
+import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
+import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
 import type { Company, Factura, Secuencia } from '@/types';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
 export default function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -21,6 +27,11 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [tab, setTab] = useState<'secuencias' | 'facturas'>('secuencias');
   const [showKey, setShowKey] = useState(false);
   const [currentApiKey, setCurrentApiKey] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
+  const [showCambiarPlan, setShowCambiarPlan] = useState(false);
+  const [showCrearSeq, setShowCrearSeq] = useState(false);
+  const [suspendiendo, setSuspendiendo] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [toastNode, toast] = useToast();
 
   useEffect(() => {
@@ -39,14 +50,64 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
 
   const handleRegenerateKey = async () => {
     if (!company) return;
+    if (!confirm('¿Regenerar el API Key? La llave anterior quedará inválida de inmediato.')) return;
+    setRegenerating(true);
     try {
-      const result = await adminApi.regenerateApiKey(company.id) as { apiKey?: string; api_key?: string };
-      const newKey = result?.apiKey ?? result?.api_key;
-      if (newKey) setCurrentApiKey(newKey);
+      const newKey = await regenerateApiKey(company.id, company.razon);
+      setCurrentApiKey(newKey);
+      setShowKey(true);
       toast('API Key regenerada exitosamente');
-    } catch {
-      toast('API Key regenerada (modo demo)');
+    } catch (err) {
+      toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo regenerar'));
+    } finally {
+      setRegenerating(false);
     }
+  };
+
+  const handleSuspender = async () => {
+    if (!company) return;
+    const nuevoEstado: Company['estado'] = company.estado === 'Suspendido' ? 'Activo' : 'Suspendido';
+    const msg = nuevoEstado === 'Suspendido'
+      ? `¿Suspender a ${company.razon}? El acceso a la API quedará bloqueado.`
+      : `¿Reactivar a ${company.razon}?`;
+    if (!confirm(msg)) return;
+    setSuspendiendo(true);
+    try {
+      await updateCompanyEstado(company.id, nuevoEstado, company.razon);
+      setCompany((c) => c ? { ...c, estado: nuevoEstado } : c);
+      toast(nuevoEstado === 'Suspendido' ? 'Cliente suspendido' : 'Cliente reactivado');
+    } catch (err) {
+      toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo actualizar'));
+    } finally {
+      setSuspendiendo(false);
+    }
+  };
+
+  const handleCertUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !company) return;
+    setUploadError('');
+    const formData = new FormData();
+    formData.append('certificate', file);
+    formData.append('company_id', company.id);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
+      const res = await fetch(`${API_BASE}/admin/companies/${company.id}/certificate`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+      toast('Certificado subido exitosamente');
+      setCompany((c) => c ? { ...c, cert: 'Vigente' } : c);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al subir el certificado';
+      setUploadError(msg.includes('CORS') || msg.includes('fetch') ? 'El API backend no está disponible. Sube el certificado directamente al servidor.' : msg);
+    }
+    e.target.value = '';
   };
 
   if (loading || !company) {
@@ -91,11 +152,16 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           </div>
         </div>
         <div className="page-head-actions">
-          <button className="btn" onClick={() => toast('Plan: selector abierto')}>
+          <button className="btn" onClick={() => setShowCambiarPlan(true)}>
             <Icon name="planes" />Cambiar Plan
           </button>
-          <button className="btn danger" onClick={() => toast('Cliente suspendido')}>
-            <Icon name="power" />Suspender
+          <button
+            className={`btn ${company.estado === 'Suspendido' ? 'primary' : 'danger'}`}
+            onClick={handleSuspender}
+            disabled={suspendiendo}
+          >
+            <Icon name="power" />
+            {suspendiendo ? '…' : company.estado === 'Suspendido' ? 'Reactivar' : 'Suspender'}
           </button>
         </div>
       </div>
@@ -119,8 +185,8 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             }}>
               <Icon name="copy" />
             </button>
-            <button className="kbtn" title="Regenerar" onClick={handleRegenerateKey}>
-              <Icon name="refresh" />
+            <button className="kbtn" title="Regenerar" onClick={handleRegenerateKey} disabled={regenerating}>
+              <Icon name="refresh" style={{ opacity: regenerating ? 0.5 : 1 }} />
             </button>
           </div>
           <div className="note info" style={{ marginTop: 12 }}>
@@ -143,9 +209,16 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             <span className="muted" style={{ fontSize: 12.5 }}>Vencimiento</span>
             <span className="strong mono">{company.certVence}</span>
           </div>
-          <button className="btn sm" style={{ width: '100%' }} onClick={() => toast(company.cert === 'Pendiente' ? 'Subir certificado' : 'Renovar certificado')}>
-            <Icon name="file" />{company.cert === 'Pendiente' ? 'Subir certificado' : 'Renovar'}
-          </button>
+          <label className="btn sm" style={{ width: '100%', textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Icon name="file" />
+            {company.cert === 'Pendiente' ? 'Subir certificado' : 'Renovar'}
+            <input type="file" accept=".p12,.pfx" style={{ display: 'none' }} onChange={handleCertUpload} />
+          </label>
+          {uploadError && (
+            <div className="note" style={{ marginTop: 10, background: 'var(--err-bg)', borderColor: 'var(--err-bd)', color: 'var(--err)', fontSize: 11.5 }}>
+              <Icon name="warning" style={{ width: 14, height: 14 }} /><span>{uploadError}</span>
+            </div>
+          )}
         </div>
 
         {/* Plan */}
@@ -184,84 +257,120 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           <div>
             <div className="toolbar" style={{ justifyContent: 'space-between' }}>
               <span className="muted" style={{ fontSize: 12.5 }}>{secuencias.length} secuencias autorizadas por la DGII</span>
-              <button className="btn sm primary" onClick={() => toast('Crear secuencia e-NCF')}>
+              <button className="btn sm primary" onClick={() => setShowCrearSeq(true)}>
                 <Icon name="plus" />Crear Secuencia
               </button>
             </div>
-            <div className="table-wrap">
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Tipo</th><th>Rango autorizado</th>
-                    <th className="num">Usadas</th><th className="num">Disponibles</th>
-                    <th>Consumo</th><th>Vence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {secuencias.map((s, i) => {
-                    const disp = s.hasta - s.usadas;
-                    const pct = (s.usadas / s.hasta) * 100;
-                    const mc = pct > 90 ? 'err' : pct > 75 ? 'warn' : 'ok';
-                    return (
-                      <tr key={i}>
-                        <td>
-                          <span className="tag-type">{s.tipo}</span>
-                          <span className="strong" style={{ marginLeft: 6 }}>{s.desc}</span>
-                        </td>
-                        <td className="mono">
-                          {String(s.desde).padStart(8, '0')} – {String(s.hasta).padStart(8, '0')}
-                        </td>
-                        <td className="num">{fmtNum(s.usadas)}</td>
-                        <td className="num strong">{fmtNum(disp)}</td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div className={`meter ${mc}`} style={{ width: 90 }}>
-                              <i style={{ width: pct + '%' }} />
+            {secuencias.length === 0 ? (
+              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                No hay secuencias registradas para este cliente
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>Tipo</th><th>Rango autorizado</th>
+                      <th className="num">Usadas</th><th className="num">Disponibles</th>
+                      <th>Consumo</th><th>Vence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {secuencias.map((s, i) => {
+                      const disp = s.hasta - s.usadas;
+                      const pct = (s.usadas / s.hasta) * 100;
+                      const mc = pct > 90 ? 'err' : pct > 75 ? 'warn' : 'ok';
+                      return (
+                        <tr key={i}>
+                          <td>
+                            <span className="tag-type">{s.tipo}</span>
+                            <span className="strong" style={{ marginLeft: 6 }}>{s.desc}</span>
+                          </td>
+                          <td className="mono">
+                            {String(s.desde).padStart(8, '0')} – {String(s.hasta).padStart(8, '0')}
+                          </td>
+                          <td className="num">{fmtNum(s.usadas)}</td>
+                          <td className="num strong">{fmtNum(disp)}</td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div className={`meter ${mc}`} style={{ width: 90 }}>
+                                <i style={{ width: pct + '%' }} />
+                              </div>
+                              <span className="muted" style={{ fontSize: 11.5, width: 34 }}>
+                                {pct.toFixed(0)}%
+                              </span>
                             </div>
-                            <span className="muted" style={{ fontSize: 11.5, width: 34 }}>
-                              {pct.toFixed(0)}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="mono muted">{s.vence}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                          <td className="mono muted">{s.vence}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
         {tab === 'facturas' && (
-          <div className="table-wrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>eNCF</th><th>Tipo</th>
-                  <th className="num">Monto</th><th className="num">ITBIS</th>
-                  <th>Fecha</th><th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {facturas.map((f) => (
-                  <tr key={f.id}>
-                    <td className="mono">{f.encf}</td>
-                    <td>
-                      <span className="tag-type">{f.tipo}</span>{' '}
-                      {ECF_TYPES[f.tipo]}
-                    </td>
-                    <td className="num strong">${fmtDOP(f.monto)}</td>
-                    <td className="num muted">${fmtDOP(f.itbis)}</td>
-                    <td className="muted">{fmtDateTime(f.fecha)}</td>
-                    <td><EstadoBadge estado={f.estado} /></td>
+          facturas.length === 0 ? (
+            <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
+              No hay facturas registradas para este cliente
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>eNCF</th><th>Tipo</th>
+                    <th className="num">Monto</th><th className="num">ITBIS</th>
+                    <th>Fecha</th><th>Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {facturas.map((f) => (
+                    <tr key={f.id}>
+                      <td className="mono">{f.encf}</td>
+                      <td>
+                        <span className="tag-type">{f.tipo}</span>{' '}
+                        {ECF_TYPES[f.tipo]}
+                      </td>
+                      <td className="num strong">${fmtDOP(f.monto)}</td>
+                      <td className="num muted">${fmtDOP(f.itbis)}</td>
+                      <td className="muted">{fmtDateTime(f.fecha)}</td>
+                      <td><EstadoBadge estado={f.estado} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
+
+      {showCambiarPlan && (
+        <CambiarPlanModal
+          company={company}
+          onClose={() => setShowCambiarPlan(false)}
+          onUpdated={(newPlan) => {
+            setCompany((c) => c ? { ...c, plan: newPlan } : c);
+            setShowCambiarPlan(false);
+            toast(`Plan cambiado a ${newPlan}`);
+          }}
+        />
+      )}
+
+      {showCrearSeq && (
+        <CrearSecuenciaModal
+          company={company}
+          onClose={() => setShowCrearSeq(false)}
+          onCreated={() => {
+            setShowCrearSeq(false);
+            toast('Secuencia creada. Recargando…');
+            getSecuencias(id).then(setSecuencias);
+          }}
+        />
+      )}
 
       {toastNode}
     </div>

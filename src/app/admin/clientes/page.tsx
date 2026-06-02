@@ -9,7 +9,8 @@ import { CoMark } from '@/components/ui/CoMark';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { fmtNum } from '@/lib/data';
-import { getClientes } from '@/lib/data-layer';
+import { getClientes, exportCSV } from '@/lib/data-layer';
+import { NuevoClienteModal, ApiKeyRevealModal } from '@/components/modals/NuevoClienteModal';
 import type { Company } from '@/types';
 
 export default function ClientesPage() {
@@ -20,6 +21,9 @@ export default function ClientesPage() {
   const [plan, setPlan] = useState('Todos');
   const [estado, setEstado] = useState('Todos');
   const [page, setPage] = useState(1);
+  const [showNuevo, setShowNuevo] = useState(false);
+  const [createdCompany, setCreatedCompany] = useState<Company | null>(null);
+  const [createdKey, setCreatedKey] = useState('');
   const [toastNode, toast] = useToast();
   const pageSize = 8;
 
@@ -47,6 +51,29 @@ export default function ClientesPage() {
     setPage(1);
   };
 
+  const handleExportCSV = () => {
+    const rows = filtered.map((c) => ({
+      RNC: c.rnc,
+      'Razón Social': c.razon,
+      Alias: c.alias,
+      Plan: c.plan,
+      Estado: c.estado,
+      Ambiente: c.amb,
+      'Facturas/mes': c.facturasMes,
+      Límite: c.limite,
+      Certificado: c.cert,
+      'Cert. Vence': c.certVence,
+    }));
+    exportCSV(rows as unknown as Record<string, unknown>[], `clientes_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  const handleClienteCreated = (company: Company, apiKey: string) => {
+    setShowNuevo(false);
+    setCreatedCompany(company);
+    setCreatedKey(apiKey);
+    setClientes((prev) => [company, ...prev]);
+  };
+
   if (loading) {
     return (
       <div className="content-wrap">
@@ -65,8 +92,10 @@ export default function ClientesPage() {
           <p>{clientes.length} empresas registradas · {clientes.filter((c) => c.estado === 'Activo').length} activas</p>
         </div>
         <div className="page-head-actions">
-          <button className="btn"><Icon name="download" />Exportar CSV</button>
-          <button className="btn primary" onClick={() => toast('Formulario de nuevo cliente abierto')}>
+          <button className="btn" onClick={handleExportCSV}>
+            <Icon name="download" />Exportar CSV
+          </button>
+          <button className="btn primary" onClick={() => setShowNuevo(true)}>
             <Icon name="plus" />Nuevo Cliente
           </button>
         </div>
@@ -132,10 +161,12 @@ export default function ClientesPage() {
                       <button className="ra" title="Ver detalle" onClick={() => router.push(`/admin/clientes/${c.id}`)}>
                         <Icon name="eye2" />
                       </button>
-                      <button className="ra" title="API Key" onClick={() => toast('API Key copiada')}>
+                      <button className="ra" title="Copiar API Key" onClick={() => {
+                        navigator.clipboard?.writeText(c.apiKey);
+                        toast('API Key copiada al portapapeles');
+                      }}>
                         <Icon name="key" />
                       </button>
-                      <button className="ra" title="Más"><Icon name="more" /></button>
                     </div>
                   </td>
                 </tr>
@@ -146,6 +177,21 @@ export default function ClientesPage() {
 
         <Pagination page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} />
       </div>
+
+      {showNuevo && (
+        <NuevoClienteModal
+          onClose={() => setShowNuevo(false)}
+          onCreated={handleClienteCreated}
+        />
+      )}
+
+      {createdCompany && (
+        <ApiKeyRevealModal
+          company={createdCompany}
+          apiKey={createdKey}
+          onClose={() => { setCreatedCompany(null); setCreatedKey(''); }}
+        />
+      )}
 
       {toastNode}
     </div>

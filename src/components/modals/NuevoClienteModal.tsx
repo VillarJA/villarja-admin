@@ -1,0 +1,198 @@
+'use client';
+
+import { useState } from 'react';
+import { Icon } from '@/components/Icons';
+import { createCompany } from '@/lib/data-layer';
+import type { Company } from '@/types';
+
+interface Props {
+  onClose: () => void;
+  onCreated: (company: Company, apiKey: string) => void;
+}
+
+export function NuevoClienteModal({ onClose, onCreated }: Props) {
+  const [rnc, setRnc] = useState('');
+  const [razon, setRazon] = useState('');
+  const [alias, setAlias] = useState('');
+  const [plan, setPlan] = useState<Company['plan']>('Pro');
+  const [amb, setAmb] = useState('eCF');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rnc.trim() || !razon.trim() || !alias.trim()) {
+      setError('RNC, razón social y alias son requeridos.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const company = await createCompany({
+        rnc: rnc.trim(),
+        razonSocial: razon.trim(),
+        alias: alias.trim().toUpperCase(),
+        plan,
+        ambiente: amb,
+      });
+      onCreated(company, company.apiKey);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al crear el cliente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 999,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="card card-pad"
+        style={{ width: 480, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <h2 style={{ marginBottom: 2 }}>Nuevo Cliente</h2>
+            <p className="muted" style={{ fontSize: 12.5 }}>El API Key se genera automáticamente</p>
+          </div>
+          <button className="kbtn" onClick={onClose}><Icon name="close" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label className="cfg-label">RNC *</label>
+            <input
+              className="cfg-inp mono"
+              value={rnc}
+              onChange={(e) => setRnc(e.target.value)}
+              placeholder="101234567"
+              maxLength={11}
+              required
+            />
+          </div>
+          <div>
+            <label className="cfg-label">Razón Social *</label>
+            <input
+              className="cfg-inp"
+              value={razon}
+              onChange={(e) => setRazon(e.target.value)}
+              placeholder="Empresa Ejemplo SRL"
+              required
+            />
+          </div>
+          <div>
+            <label className="cfg-label">Alias (nombre corto) *</label>
+            <input
+              className="cfg-inp mono"
+              value={alias}
+              onChange={(e) => setAlias(e.target.value.toUpperCase())}
+              placeholder="EMPEJEMPLO"
+              maxLength={20}
+              required
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label className="cfg-label">Plan</label>
+              <select className="cfg-inp" value={plan} onChange={(e) => setPlan(e.target.value as Company['plan'])}>
+                <option value="Básico">Básico — $2,500</option>
+                <option value="Pro">Pro — $8,900</option>
+                <option value="Enterprise">Enterprise — $29,500</option>
+              </select>
+            </div>
+            <div>
+              <label className="cfg-label">Ambiente</label>
+              <select className="cfg-inp" value={amb} onChange={(e) => setAmb(e.target.value)}>
+                <option value="testeCF">testeCF (pruebas)</option>
+                <option value="certeCF">certeCF (cert.)</option>
+                <option value="eCF">eCF (producción)</option>
+              </select>
+            </div>
+          </div>
+
+          {error && (
+            <div className="note" style={{ background: 'var(--err-bg)', borderColor: 'var(--err-bd)', color: 'var(--err)' }}>
+              <Icon name="warning" /><span>{error}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button type="button" className="btn" onClick={onClose} disabled={loading}>Cancelar</button>
+            <button type="submit" className="btn primary" disabled={loading}>
+              {loading ? 'Creando…' : <><Icon name="plus" />Crear Cliente</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface ApiKeyRevealProps {
+  company: Company;
+  apiKey: string;
+  onClose: () => void;
+}
+
+export function ApiKeyRevealModal({ company, apiKey, onClose }: ApiKeyRevealProps) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard?.writeText(apiKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 999,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div className="card card-pad" style={{ width: 480, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <span style={{
+            width: 40, height: 40, borderRadius: 10, background: 'var(--ok-bg)',
+            color: 'var(--ok)', display: 'grid', placeItems: 'center',
+          }}>
+            <Icon name="checkcircle" style={{ width: 22, height: 22 }} />
+          </span>
+          <div>
+            <h3 style={{ marginBottom: 2 }}>Cliente creado exitosamente</h3>
+            <p className="muted" style={{ fontSize: 12.5 }}>{company.razon}</p>
+          </div>
+        </div>
+
+        <div className="note info" style={{ marginBottom: 14 }}>
+          <Icon name="shield" />
+          <div>Guarda esta API Key ahora. No se mostrará completa de nuevo.</div>
+        </div>
+
+        <div className="apikey-box" style={{ marginBottom: 18 }}>
+          <code style={{ fontSize: 12 }}>{apiKey}</code>
+          <button className="kbtn" onClick={copy}>
+            <Icon name={copied ? 'check' : 'copy'} />
+          </button>
+        </div>
+
+        <div className="kv" style={{ marginBottom: 18, fontSize: 12.5 }}>
+          <dt>RNC</dt><dd className="mono">{company.rnc}</dd>
+          <dt>Plan</dt><dd>{company.plan}</dd>
+          <dt>Ambiente</dt><dd><span className="tag-type">{company.amb}</span></dd>
+        </div>
+
+        <button className="btn primary" style={{ width: '100%' }} onClick={onClose}>
+          Entendido
+        </button>
+      </div>
+    </div>
+  );
+}

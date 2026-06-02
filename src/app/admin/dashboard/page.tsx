@@ -7,22 +7,32 @@ import { KPICard } from '@/components/ui/KPICard';
 import { EstadoBadge } from '@/components/ui/Badge';
 import { LineChart } from '@/components/charts/LineChart';
 import { DonutChart } from '@/components/charts/DonutChart';
-import { SERIE_30D, DONUT_TIPOS, fmtNum, fmtDOP, fmtDate } from '@/lib/data';
-import { getClientes, getFacturas, getDGIIServices } from '@/lib/data-layer';
-import type { Company, Factura, DgiiService } from '@/types';
+import { fmtNum, fmtDOP, fmtDate } from '@/lib/data';
+import { getClientes, getFacturas, getDGIIServices, getChartData30d, getDonutTipos } from '@/lib/data-layer';
+import type { Company, Factura, DgiiService, DonutItem } from '@/types';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [clientes, setClientes] = useState<Company[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [dgiiServices, setDgiiServices] = useState<DgiiService[]>([]);
+  const [serie30d, setSerie30d] = useState<number[]>([]);
+  const [donutTipos, setDonutTipos] = useState<DonutItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getClientes(), getFacturas(), getDGIIServices()]).then(([cls, facs, svcs]) => {
+    Promise.all([
+      getClientes(),
+      getFacturas(),
+      getDGIIServices(),
+      getChartData30d(),
+      getDonutTipos(),
+    ]).then(([cls, facs, svcs, serie, donut]) => {
       setClientes(cls);
       setFacturas(facs);
       setDgiiServices(svcs);
+      setSerie30d(serie);
+      setDonutTipos(donut);
       setLoading(false);
     });
   }, []);
@@ -43,6 +53,8 @@ export default function DashboardPage() {
   const ingresosMes = clientes.reduce((s, c) => s + (c.estado !== 'Suspendido' ? c.ingresoMes : 0), 0);
   const rechazados = facturas.filter((f) => f.estado === 'rejected').length;
   const tasaRechazo = facturas.length > 0 ? ((rechazados / facturas.length) * 100).toFixed(1) + '%' : '0.0%';
+  const chartTotal = serie30d.reduce((s, n) => s + n, 0);
+  const allServicesOk = dgiiServices.every((s) => s.estado === 'ok');
 
   return (
     <div className="content-wrap fade-in">
@@ -52,7 +64,6 @@ export default function DashboardPage() {
           <p>Resumen operativo · {fmtDate(new Date())}</p>
         </div>
         <div className="page-head-actions">
-          <button className="btn"><Icon name="download" />Exportar</button>
           <button className="btn primary" onClick={() => router.push('/admin/clientes')}>
             <Icon name="plus" />Nuevo Cliente
           </button>
@@ -61,10 +72,10 @@ export default function DashboardPage() {
 
       {/* KPIs */}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 18 }}>
-        <KPICard icon="building" iconBg="var(--brand-soft)" iconColor="var(--brand)" label="Clientes activos" value={String(clientesActivos)} delta="+6" deltaNote="este mes" up />
-        <KPICard icon="receipt" iconBg="var(--info-bg)" iconColor="var(--info)" label="Facturas hoy" value={fmtNum(facturas.length)} delta="+12.4%" deltaNote="vs. ayer" up />
-        <KPICard icon="dollar" iconBg="var(--ok-bg)" iconColor="var(--ok)" label="Ingresos del mes" value={'$' + fmtNum(ingresosMes)} unit="DOP" delta="+8.1%" deltaNote="vs. mayo" up />
-        <KPICard icon="trending" iconBg="var(--err-bg)" iconColor="var(--err)" label="Tasa rechazo DGII" value={tasaRechazo} delta="-0.3pp" deltaNote="mejoró" up />
+        <KPICard icon="building" iconBg="var(--brand-soft)" iconColor="var(--brand)" label="Clientes activos" value={String(clientesActivos)} />
+        <KPICard icon="receipt" iconBg="var(--info-bg)" iconColor="var(--info)" label="e-CF en plataforma" value={fmtNum(facturas.length)} />
+        <KPICard icon="dollar" iconBg="var(--ok-bg)" iconColor="var(--ok)" label="Ingresos del mes" value={'$' + fmtNum(ingresosMes)} unit="DOP" />
+        <KPICard icon="trending" iconBg="var(--err-bg)" iconColor="var(--err)" label="Tasa rechazo DGII" value={tasaRechazo} />
       </div>
 
       {/* Charts */}
@@ -73,17 +84,26 @@ export default function DashboardPage() {
           <div className="card-head">
             <div>
               <h3>Facturas emitidas — últimos 30 días</h3>
-              <p>{fmtNum(totalMes)} e-CF acumulados en el período</p>
+              <p>{fmtNum(chartTotal > 0 ? chartTotal : totalMes)} e-CF acumulados en el período</p>
             </div>
-            <span className="badge ok"><i className="bdot" />+14.2%</span>
           </div>
-          <div className="card-pad"><LineChart data={SERIE_30D} /></div>
+          <div className="card-pad">
+            {serie30d.every((v) => v === 0)
+              ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5, padding: '32px 0' }}>Sin datos de facturación en los últimos 30 días</div>
+              : <LineChart data={serie30d} />
+            }
+          </div>
         </div>
         <div className="card">
           <div className="card-head">
             <div><h3>Distribución por tipo e-CF</h3><p>Mes en curso</p></div>
           </div>
-          <div className="card-pad"><DonutChart data={DONUT_TIPOS} /></div>
+          <div className="card-pad">
+            {donutTipos.length === 0
+              ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5, padding: '32px 0' }}>Sin datos este mes</div>
+              : <DonutChart data={donutTipos} />
+            }
+          </div>
         </div>
       </div>
 
@@ -96,33 +116,41 @@ export default function DashboardPage() {
               Ver todas <Icon name="chevright" style={{ width: 13, height: 13 }} />
             </button>
           </div>
-          <div className="table-wrap">
-            <table className="tbl">
-              <thead>
-                <tr><th>eNCF</th><th>Cliente</th><th className="num">Monto</th><th>Estado</th></tr>
-              </thead>
-              <tbody>
-                {recientes.map((f) => (
-                  <tr key={f.id} className="clickable" onClick={() => router.push('/admin/facturas')}>
-                    <td>
-                      <span className="mono">{f.encf}</span>
-                      <span className="tag-type" style={{ marginLeft: 8 }}>{f.tipo}</span>
-                    </td>
-                    <td className="strong">{f.cliente.length > 24 ? f.cliente.slice(0, 24) + '…' : f.cliente}</td>
-                    <td className="num strong">${fmtDOP(f.total)}</td>
-                    <td><EstadoBadge estado={f.estado} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {recientes.length === 0 ? (
+            <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
+              No hay facturas registradas
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr><th>eNCF</th><th>Cliente</th><th className="num">Monto</th><th>Estado</th></tr>
+                </thead>
+                <tbody>
+                  {recientes.map((f) => (
+                    <tr key={f.id} className="clickable" onClick={() => router.push('/admin/facturas')}>
+                      <td>
+                        <span className="mono">{f.encf}</span>
+                        <span className="tag-type" style={{ marginLeft: 8 }}>{f.tipo}</span>
+                      </td>
+                      <td className="strong">{f.cliente.length > 24 ? f.cliente.slice(0, 24) + '…' : f.cliente}</td>
+                      <td className="num strong">${fmtDOP(f.total)}</td>
+                      <td><EstadoBadge estado={f.estado} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div className="card">
             <div className="card-head">
               <div><h3>Estado servicios DGII</h3></div>
-              <span className="badge ok"><i className="bdot" />Operativo</span>
+              <span className={`badge ${allServicesOk ? 'ok' : 'warn'}`}>
+                <i className="bdot" />{allServicesOk ? 'Operativo' : 'Degradado'}
+              </span>
             </div>
             <div className="card-pad" style={{ paddingTop: 4, paddingBottom: 8 }}>
               <div className="svc-list">
@@ -154,7 +182,7 @@ export default function DashboardPage() {
             <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: '-0.5px', marginBottom: 2 }} className="mono">
               ecf.villarja.com
             </div>
-            <div style={{ fontSize: 12, color: '#9092a8' }}>API v2 · uptime 99.98% · 14ms p50</div>
+            <div style={{ fontSize: 12, color: '#9092a8' }}>API v2 · {clientes.length} clientes activos</div>
           </div>
         </div>
       </div>
