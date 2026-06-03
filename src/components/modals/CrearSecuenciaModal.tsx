@@ -15,8 +15,9 @@ interface Props {
 export function CrearSecuenciaModal({ company, onClose, onCreated }: Props) {
   const [tipoEcf, setTipoEcf] = useState(31);
   const [desde, setDesde] = useState('1');
-  const [hasta, setHasta] = useState('1000');
-  const [vence, setVence] = useState(new Date().getFullYear() + '-12-31');
+  const [hasta, setHasta] = useState('10000000');
+  const [vence, setVence] = useState(new Date().getFullYear() + 1 + '-12-31');
+  const [ambiente, setAmbiente] = useState(company.amb.toLowerCase());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -39,6 +40,7 @@ export function CrearSecuenciaModal({ company, onClose, onCreated }: Props) {
         hasta: hastaN,
         fechaVencimiento: vence,
         razonCliente: company.razon,
+        ambiente,
       });
       onCreated();
     } catch (err) {
@@ -67,6 +69,19 @@ export function CrearSecuenciaModal({ company, onClose, onCreated }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label className="cfg-label">Ambiente *</label>
+            <select
+              className="cfg-inp"
+              value={ambiente}
+              onChange={(e) => setAmbiente(e.target.value)}
+            >
+              <option value="testecf">testeCF — Pre-certificación (pruebas)</option>
+              <option value="certecf">certeCF — Certificación DGII</option>
+              <option value="ecf">eCF — Producción</option>
+            </select>
+          </div>
+
           <div>
             <label className="cfg-label">Tipo e-CF *</label>
             <select

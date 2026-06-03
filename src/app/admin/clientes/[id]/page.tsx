@@ -10,13 +10,12 @@ import { PLAN_LIMITS, ECF_TYPES, fmtNum, fmtDOP, fmtDateTime } from '@/lib/data'
 import {
   getClienteById, getFacturasForCliente, getSecuencias,
   regenerateApiKey, updateCompanyEstado,
+  uploadCertificate, updateCertPassword,
 } from '@/lib/data-layer';
 import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
 import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
 import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
 import type { Company, Factura, Secuencia } from '@/types';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
 export default function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -35,6 +34,8 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [showCrearSeq, setShowCrearSeq] = useState(false);
   const [suspendiendo, setSuspendiendo] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [certPassword, setCertPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
   const [toastNode, toast] = useToast();
 
   useEffect(() => {
@@ -74,16 +75,19 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
 
   const handleSuspender = async () => {
     if (!company) return;
-    const nuevoEstado: Company['estado'] = company.estado === 'Suspendido' ? 'Activo' : 'Suspendido';
+    const nuevoEstado: Company['estado'] = company.estado === 'Activo' ? 'Suspendido' : 'Activo';
     const msg = nuevoEstado === 'Suspendido'
       ? `¿Suspender a ${company.razon}? El acceso a la API quedará bloqueado.`
-      : `¿Reactivar a ${company.razon}?`;
+      : company.estado === 'Pendiente'
+        ? `¿Activar a ${company.razon}? Esto habilitará el acceso a la API.`
+        : `¿Reactivar a ${company.razon}?`;
     if (!confirm(msg)) return;
     setSuspendiendo(true);
     try {
       await updateCompanyEstado(company.id, nuevoEstado, company.razon);
       setCompany((c) => c ? { ...c, estado: nuevoEstado } : c);
-      toast(nuevoEstado === 'Suspendido' ? 'Cliente suspendido' : 'Cliente reactivado');
+      const label = nuevoEstado === 'Suspendido' ? 'Cliente suspendido' : nuevoEstado === 'Activo' && company.estado === 'Pendiente' ? 'Cliente activado' : 'Cliente reactivado';
+      toast(label);
     } catch (err) {
       toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo actualizar'));
     } finally {
@@ -95,27 +99,28 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     const file = e.target.files?.[0];
     if (!file || !company) return;
     setUploadError('');
-    const formData = new FormData();
-    formData.append('certificate', file);
-    formData.append('company_id', company.id);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
-      const res = await fetch(`${API_BASE}/admin/companies/${company.id}/certificate`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
+      await uploadCertificate(company.id, file, company.razon);
       toast('Certificado subido exitosamente');
       setCompany((c) => c ? { ...c, cert: 'Vigente' } : c);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al subir el certificado';
-      setUploadError(msg.includes('CORS') || msg.includes('fetch') ? 'El API backend no está disponible. Sube el certificado directamente al servidor.' : msg);
+      setUploadError(err instanceof Error ? err.message : 'Error al subir el certificado');
     }
     e.target.value = '';
+  };
+
+  const handleSavePassword = async () => {
+    if (!company || !certPassword.trim()) return;
+    setSavingPassword(true);
+    try {
+      await updateCertPassword(company.id, certPassword, company.razon);
+      setCertPassword('');
+      toast('Contraseña del certificado guardada');
+    } catch (err) {
+      toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo guardar'));
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   if (loading || !company) {
@@ -183,12 +188,14 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             <Icon name="globe" />Cambiar Ambiente
           </button>
           <button
-            className={`btn ${company.estado === 'Suspendido' ? 'primary' : 'danger'}`}
+            className={`btn ${company.estado === 'Activo' ? 'danger' : 'primary'}`}
             onClick={handleSuspender}
             disabled={suspendiendo}
           >
             <Icon name="power" />
-            {suspendiendo ? '…' : company.estado === 'Suspendido' ? 'Reactivar' : 'Suspender'}
+            {suspendiendo ? '…' :
+              company.estado === 'Pendiente' ? 'Activar' :
+              company.estado === 'Suspendido' ? 'Reactivar' : 'Suspender'}
           </button>
         </div>
       </div>
@@ -246,6 +253,34 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
               <Icon name="warning" style={{ width: 14, height: 14 }} /><span>{uploadError}</span>
             </div>
           )}
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <span className="muted" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+              Contraseña del .p12
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={certPassword}
+                onChange={(e) => setCertPassword(e.target.value)}
+                style={{
+                  flex: 1, fontSize: 13, padding: '5px 8px',
+                  border: '1px solid var(--border)', borderRadius: 6,
+                  background: 'var(--surface)', color: 'var(--text)',
+                }}
+              />
+              <button
+                className="btn sm"
+                onClick={handleSavePassword}
+                disabled={savingPassword || !certPassword.trim()}
+              >
+                {savingPassword ? '…' : 'Guardar'}
+              </button>
+            </div>
+            <span className="muted" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+              Requerida por el API para firmar e-CF
+            </span>
+          </div>
         </div>
 
         {/* Plan */}
@@ -297,7 +332,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                 <table className="tbl">
                   <thead>
                     <tr>
-                      <th>Tipo</th><th>Rango autorizado</th>
+                      <th>Tipo</th><th>Rango autorizado</th><th>Ambiente</th>
                       <th className="num">Usadas</th><th className="num">Disponibles</th>
                       <th>Consumo</th><th>Vence</th>
                     </tr>
@@ -316,6 +351,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                           <td className="mono">
                             {String(s.desde).padStart(8, '0')} – {String(s.hasta).padStart(8, '0')}
                           </td>
+                          <td><span className="tag-type">{s.ambiente}</span></td>
                           <td className="num">{fmtNum(s.usadas)}</td>
                           <td className="num strong">{fmtNum(disp)}</td>
                           <td>

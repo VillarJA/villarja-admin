@@ -140,11 +140,11 @@ export const DGII_SERVICES: DgiiService[] = [
 ];
 
 export const SECUENCIAS: Secuencia[] = [
-  { tipo: 31, desc: 'Crédito Fiscal',  desde: 1, hasta: 50000, usadas: 38420, vence: '2026-12-31' },
-  { tipo: 32, desc: 'Consumo',         desde: 1, hasta: 50000, usadas: 41980, vence: '2026-12-31' },
-  { tipo: 34, desc: 'Nota de Crédito', desde: 1, hasta: 10000, usadas: 2140,  vence: '2026-12-31' },
-  { tipo: 33, desc: 'Nota de Débito',  desde: 1, hasta: 5000,  usadas: 680,   vence: '2026-12-31' },
-  { tipo: 41, desc: 'Compras',         desde: 1, hasta: 10000, usadas: 4310,  vence: '2026-12-31' },
+  { tipo: 31, desc: 'Crédito Fiscal',  desde: 1, hasta: 50000, usadas: 38420, vence: '2026-12-31', ambiente: 'ecf' },
+  { tipo: 32, desc: 'Consumo',         desde: 1, hasta: 50000, usadas: 41980, vence: '2026-12-31', ambiente: 'ecf' },
+  { tipo: 34, desc: 'Nota de Crédito', desde: 1, hasta: 10000, usadas: 2140,  vence: '2026-12-31', ambiente: 'ecf' },
+  { tipo: 33, desc: 'Nota de Débito',  desde: 1, hasta: 5000,  usadas: 680,   vence: '2026-12-31', ambiente: 'ecf' },
+  { tipo: 41, desc: 'Compras',         desde: 1, hasta: 10000, usadas: 4310,  vence: '2026-12-31', ambiente: 'ecf' },
 ];
 
 export const CONTINGENCIA_QUEUE: ContingenciaItem[] = [

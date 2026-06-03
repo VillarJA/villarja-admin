@@ -111,6 +111,7 @@ function mapSecuencia(row: Record<string, unknown>): Secuencia {
     hasta: Number(row.secuencia_hasta ?? row.hasta ?? 1000),
     usadas: Number(row.usadas ?? 0),
     vence: String(row.fecha_vencimiento || row.vence || '—'),
+    ambiente: String(row.ambiente || 'certecf'),
   };
 }
 
@@ -557,7 +558,16 @@ export async function createCompany(input: CreateCompanyInput): Promise<Company>
 
   if (result.error) throw new Error(result.error.message);
   await insertAuditLog('Nuevo cliente registrado', input.razonSocial);
-  return mapCompany(result.data as Record<string, unknown>, 0);
+  const company = mapCompany(result.data as Record<string, unknown>, 0);
+
+  // Auto-create test sequences for certeCF / testeCF (non-critical)
+  if (input.ambiente.toLowerCase() !== 'ecf') {
+    try {
+      await createDefaultSequencias(company.id, input.ambiente, input.razonSocial);
+    } catch { /* migration may not have run yet — admin can create sequences manually */ }
+  }
+
+  return company;
 }
 
 export async function updateCompanyEstado(
@@ -641,6 +651,7 @@ export interface CreateSecuenciaInput {
   hasta: number;
   fechaVencimiento: string;
   razonCliente: string;
+  ambiente: string;
 }
 
 export async function createSecuencia(input: CreateSecuenciaInput): Promise<void> {
@@ -653,12 +664,99 @@ export async function createSecuencia(input: CreateSecuenciaInput): Promise<void
     secuencia_hasta: input.hasta,
     usadas: 0,
     fecha_vencimiento: input.fechaVencimiento,
+    ambiente: input.ambiente.toLowerCase(),
   });
   if (error) throw new Error(error.message);
   await insertAuditLog(
-    `Creó secuencia e-NCF (${input.tipoEcf})`,
+    `Creó secuencia e-NCF tipo ${input.tipoEcf} (${input.ambiente})`,
     input.razonCliente,
   );
+}
+
+// ─── DEFAULT SEQUENCES ────────────────────────────────────────────────────────
+
+const DEFAULT_SEQUENCE_TYPES = [31, 32, 33, 34, 41, 43, 44, 45, 46, 47];
+
+export async function createDefaultSequencias(
+  companyId: string,
+  ambiente: string,
+  razonCliente: string,
+): Promise<void> {
+  if (!supabase) return;
+  const norm = ambiente.toLowerCase();
+  if (norm === 'ecf') return; // Production sequences come from DGII; admin enters them manually
+
+  // certeCF: DGII allows up to 10,000,000 per type; testeCF: small range for local testing
+  const hasta = norm === 'testecf' ? 9999 : 10000000;
+
+  const exp = new Date();
+  norm === 'testecf' ? exp.setMonth(exp.getMonth() + 6) : exp.setFullYear(exp.getFullYear() + 1);
+  const vence = `${String(exp.getDate()).padStart(2, '0')}-${String(exp.getMonth() + 1).padStart(2, '0')}-${exp.getFullYear()}`;
+
+  const inserts = DEFAULT_SEQUENCE_TYPES.map((tipo) => ({
+    company_id: companyId,
+    tipo_ecf: tipo,
+    descripcion: ECF_TYPES[tipo] ?? '',
+    secuencia_desde: 1,
+    secuencia_hasta: hasta,
+    usadas: 0,
+    fecha_vencimiento: vence,
+    ambiente: norm,
+  }));
+
+  const { error } = await supabase.from('sequences').insert(inserts);
+  if (error) throw new Error(error.message);
+  await insertAuditLog(`Creó ${inserts.length} secuencias automáticas (${norm})`, razonCliente);
+}
+
+// ─── CERTIFICATE ──────────────────────────────────────────────────────────────
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadCertificate(
+  companyId: string,
+  file: File,
+  razon: string,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no configurado');
+  const base64 = await fileToBase64(file);
+  const { error } = await supabase
+    .from('companies')
+    .update({ certificado_data: base64, certificado_estado: 'Vigente' })
+    .eq('id', companyId);
+  if (error) {
+    if (error.code === 'PGRST204' || error.code === '42703') {
+      throw new Error('Ejecuta la migración 20260603000009_cert_password.sql en Supabase primero');
+    }
+    throw new Error(error.message);
+  }
+  await insertAuditLog('Subió certificado .p12', razon);
+}
+
+export async function updateCertPassword(
+  companyId: string,
+  password: string,
+  razon: string,
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase no configurado');
+  const { error } = await supabase
+    .from('companies')
+    .update({ certificado_password: password })
+    .eq('id', companyId);
+  if (error) {
+    if (error.code === 'PGRST204' || error.code === '42703') {
+      throw new Error('Ejecuta la migración 20260603000009_cert_password.sql en Supabase primero');
+    }
+    throw new Error(error.message);
+  }
+  await insertAuditLog('Actualizó contraseña de certificado', razon);
 }
 
 // ─── EXPORT CSV ───────────────────────────────────────────────────────────────

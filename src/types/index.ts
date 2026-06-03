@@ -38,6 +38,7 @@ export interface Secuencia {
   hasta: number;
   usadas: number;
   vence: string;
+  ambiente: string;
 }
 
 export interface ContingenciaItem {
