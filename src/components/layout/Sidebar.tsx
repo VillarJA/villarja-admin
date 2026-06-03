@@ -7,7 +7,7 @@ export type RouteId = 'dashboard' | 'clientes' | 'facturas' | 'contingencia' | '
 
 const NAV: {
   group: string;
-  items: { id: RouteId; label: string; icon: string; badge?: string; disabled?: boolean }[];
+  items: { id: RouteId; label: string; icon: string; disabled?: boolean }[];
 }[] = [
   {
     group: 'General',
@@ -20,7 +20,7 @@ const NAV: {
     items: [
       { id: 'clientes',     label: 'Clientes',     icon: 'clientes' },
       { id: 'facturas',     label: 'Emisión e-CF', icon: 'factura' },
-      { id: 'contingencia', label: 'Contingencia', icon: 'contingencia', badge: '18' },
+      { id: 'contingencia', label: 'Contingencia', icon: 'contingencia' },
       { id: 'planes',       label: 'Planes',       icon: 'planes' },
     ],
   },
@@ -35,9 +35,14 @@ interface SidebarProps {
   route: string;
   compact: boolean;
   onNavigate: (r: RouteId) => void;
+  contingenciaBadge?: number;
+  dgiiStatus?: { ok: boolean; label: string };
 }
 
-export function Sidebar({ route, compact, onNavigate }: SidebarProps) {
+export function Sidebar({ route, compact, onNavigate, contingenciaBadge, dgiiStatus }: SidebarProps) {
+  const dgiiOk = dgiiStatus?.ok ?? true;
+  const dgiiLabel = dgiiStatus?.label ?? 'Verificando…';
+
   return (
     <aside className={`sidebar${compact ? ' compact' : ''}`}>
       <div className="side-brand">
@@ -45,7 +50,7 @@ export function Sidebar({ route, compact, onNavigate }: SidebarProps) {
         {!compact && (
           <div className="side-brand-text">
             <b>Villar JA</b>
-            <span>Facturación e-CF</span>
+            <span>Admin Portal</span>
           </div>
         )}
       </div>
@@ -65,7 +70,9 @@ export function Sidebar({ route, compact, onNavigate }: SidebarProps) {
                 >
                   <Icon name={it.icon} />
                   <span>{it.label}</span>
-                  {it.badge && <span className="side-badge">{it.badge}</span>}
+                  {it.id === 'contingencia' && contingenciaBadge != null && contingenciaBadge > 0 && (
+                    <span className="side-badge">{contingenciaBadge > 99 ? '99+' : contingenciaBadge}</span>
+                  )}
                 </div>
               );
             })}
@@ -94,11 +101,11 @@ export function Sidebar({ route, compact, onNavigate }: SidebarProps) {
 
       <div className="side-foot">
         <div className="side-status">
-          <span className="dot" />
+          <span className={`dot${dgiiOk ? '' : ' warn'}`} />
           {!compact && (
             <div>
-              <b>DGII operativo</b>
-              <span>4 de 5 servicios óptimos</span>
+              <b>{dgiiOk ? 'DGII operativo' : 'DGII degradado'}</b>
+              <span>{dgiiLabel}</span>
             </div>
           )}
         </div>

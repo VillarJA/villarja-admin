@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Icon } from '@/components/Icons';
-import type { RouteId } from './Sidebar';
+import { getStoredUser } from '@/lib/auth';
 
 const TITLES: Record<string, string[]> = {
   dashboard:    ['Dashboard'],
@@ -12,6 +13,12 @@ const TITLES: Record<string, string[]> = {
   planes:       ['Planes y Facturación'],
   configuracion:['Configuración'],
 };
+
+function getInitials(nameOrEmail: string): string {
+  const parts = nameOrEmail.split(/[@\s]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return nameOrEmail.slice(0, 2).toUpperCase();
+}
 
 interface TopbarProps {
   route: string;
@@ -24,6 +31,15 @@ interface TopbarProps {
 
 export function Topbar({ route, onToggleSidebar, onNotification, onLogout, dark, onToggleDark }: TopbarProps) {
   const crumb = TITLES[route] || ['Dashboard'];
+  const [user, setUser] = useState<{ email: string; name: string } | null>(null);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
+
+  const displayName = user?.name && user.name !== user?.email ? user.name : (user?.email?.split('@')[0] ?? 'Admin');
+  const displayEmail = user?.email ?? '';
+  const initials = user ? getInitials(user.name || user.email) : 'VJ';
 
   return (
     <header className="topbar">
@@ -54,14 +70,13 @@ export function Topbar({ route, onToggleSidebar, onNotification, onLogout, dark,
 
       <button className="icon-btn" title="Notificaciones" onClick={onNotification}>
         <Icon name="bell" />
-        <span className="dot-ping" />
       </button>
 
-      <button className="avatar">
-        <span className="av-circle">VJ</span>
+      <button className="avatar" onClick={onNotification}>
+        <span className="av-circle">{initials}</span>
         <div className="av-meta">
-          <b>Admin</b>
-          <span>admin@villarja.com</span>
+          <b>{displayName}</b>
+          <span>{displayEmail}</span>
         </div>
       </button>
 

@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@villarja.com');
+  const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(true);
@@ -57,7 +57,7 @@ export default function LoginPage() {
   const demoLogin = () => {
     const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AdmlsbGFyamEuY29tIiwiZXhwIjo5OTk5OTk5OTk5fQ.demo';
     setToken(fakeToken);
-    setStoredUser({ email: 'admin@villarja.com', name: 'Admin' });
+    setStoredUser({ email: 'demo@villarja.com', name: 'Demo' });
     document.cookie = `vja_admin_token=${fakeToken}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict`;
     router.push('/admin/dashboard');
   };
@@ -74,13 +74,25 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="la-mid">
-          <h2>Plataforma de Facturación Electrónica e-CF</h2>
-          <p>Panel de administración para emisión de comprobantes fiscales electrónicos ante la DGII. Gestiona clientes, secuencias e-NCF, certificados y contingencia desde un solo lugar.</p>
+          <h2>Portal de Administración</h2>
+          <p>
+            Plataforma centralizada para gestionar clientes, operaciones y productos Villar JA.
+            Controla facturación electrónica e-CF, y próximamente FluxyMed y FluxyGo desde un solo lugar.
+          </p>
         </div>
         <div className="la-foot">
-          <div className="la-stat"><b>1.2M</b><span>e-CF emitidos / mes</span></div>
-          <div className="la-stat"><b>99.4%</b><span>tasa de aceptación</span></div>
-          <div className="la-stat"><b>240+</b><span>empresas activas</span></div>
+          <div className="la-product">
+            <span className="la-product-dot active" />
+            <span><b>e-CF</b> Facturación electrónica</span>
+          </div>
+          <div className="la-product">
+            <span className="la-product-dot soon" />
+            <span><b>FluxyMed</b> Salud digital</span>
+          </div>
+          <div className="la-product">
+            <span className="la-product-dot soon" />
+            <span><b>FluxyGo</b> Logística</span>
+          </div>
         </div>
       </div>
 
@@ -90,7 +102,7 @@ export default function LoginPage() {
             <LogoFull />
           </div>
           <h1>Iniciar sesión</h1>
-          <p className="lc-sub">Accede al portal de administración e-CF</p>
+          <p className="lc-sub">Portal de administración Villar JA</p>
 
           {error && (
             <div className="note warn" style={{ marginBottom: 16 }}>
@@ -107,8 +119,9 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@empresa.com"
+                placeholder="tu@villarja.com"
                 required
+                autoComplete="email"
               />
             </div>
           </div>
@@ -122,6 +135,7 @@ export default function LoginPage() {
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
               <button type="button" className="eye" onClick={() => setShow((s) => !s)}>
                 <Icon name={show ? 'eyeoff' : 'eye'} />
@@ -153,7 +167,7 @@ export default function LoginPage() {
           </button>
 
           <div className="login-foot">
-            Protegido con autenticación de 2 factores · <span className="mono">ecf.villarja.com</span>
+            Acceso restringido · Solo personal autorizado de Villar JA
           </div>
         </form>
       </div>

@@ -75,6 +75,21 @@ export default function FacturasPage() {
     exportCSV(csvRows as unknown as Record<string, unknown>[], `facturas_${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
+  const handleVerEstadoDgii = async (f: Factura) => {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
+    const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
+    try {
+      const res = await fetch(`${API_BASE}/admin/ecf/${f.id}/estado-dgii`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json() as { estado?: string; mensaje?: string };
+      toast(`DGII: ${json.estado ?? f.estado} — ${json.mensaje ?? 'Sin detalle'}`);
+    } catch {
+      toast(`Estado local: ${f.estado} (API DGII no disponible)`);
+    }
+  };
+
   const handleVerXml = async (f: Factura) => {
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
     const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
@@ -197,10 +212,10 @@ export default function FacturasPage() {
                         <button className="ra" title="Ver XML" onClick={() => handleVerXml(f)}>
                           <Icon name="code" />
                         </button>
-                        <button className="ra" title="Ver PDF" onClick={() => toast('PDF no disponible en el API actual')}>
+                        <button className="ra" title="PDF no disponible" disabled style={{ opacity: 0.35, cursor: 'not-allowed' }}>
                           <Icon name="file" />
                         </button>
-                        <button className="ra" title="Estado DGII" onClick={() => toast('Consultando estado en DGII…')}>
+                        <button className="ra" title="Consultar estado en DGII" onClick={() => handleVerEstadoDgii(f)}>
                           <Icon name="globe" />
                         </button>
                       </div>

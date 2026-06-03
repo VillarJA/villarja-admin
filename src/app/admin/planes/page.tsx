@@ -102,11 +102,13 @@ export default function PlanesPage() {
               ))}
             </div>
             <button
-              className={`btn${p.popular ? ' primary' : ''}`}
-              style={{ width: '100%' }}
-              onClick={() => toast('Editor de plan: en desarrollo')}
+              className="btn"
+              style={{ width: '100%', opacity: 0.55, cursor: 'not-allowed' }}
+              disabled
+              title="Edición de planes disponible próximamente"
             >
               Editar plan
+              <span style={{ marginLeft: 6, fontSize: 10, background: 'var(--surface-3)', padding: '2px 6px', borderRadius: 10, fontWeight: 700, color: 'var(--text-muted)' }}>Próximamente</span>
             </button>
           </div>
         ))}
