@@ -12,6 +12,7 @@ import {
   regenerateApiKey, updateCompanyEstado,
 } from '@/lib/data-layer';
 import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
+import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
 import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
 import type { Company, Factura, Secuencia } from '@/types';
 
@@ -29,6 +30,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [currentApiKey, setCurrentApiKey] = useState('');
   const [regenerating, setRegenerating] = useState(false);
   const [showCambiarPlan, setShowCambiarPlan] = useState(false);
+  const [showCambiarAmbiente, setShowCambiarAmbiente] = useState(false);
   const [showCrearSeq, setShowCrearSeq] = useState(false);
   const [suspendiendo, setSuspendiendo] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -53,7 +55,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     if (!confirm('¿Regenerar el API Key? La llave anterior quedará inválida de inmediato.')) return;
     setRegenerating(true);
     try {
-      const newKey = await regenerateApiKey(company.id, company.razon);
+      const newKey = await regenerateApiKey(company.id, company.razon, company.amb);
       setCurrentApiKey(newKey);
       setShowKey(true);
       toast('API Key regenerada exitosamente');
@@ -154,6 +156,9 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
         <div className="page-head-actions">
           <button className="btn" onClick={() => setShowCambiarPlan(true)}>
             <Icon name="planes" />Cambiar Plan
+          </button>
+          <button className="btn" onClick={() => setShowCambiarAmbiente(true)}>
+            <Icon name="globe" />Cambiar Ambiente
           </button>
           <button
             className={`btn ${company.estado === 'Suspendido' ? 'primary' : 'danger'}`}
@@ -356,6 +361,20 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             setCompany((c) => c ? { ...c, plan: newPlan } : c);
             setShowCambiarPlan(false);
             toast(`Plan cambiado a ${newPlan}`);
+          }}
+        />
+      )}
+
+      {showCambiarAmbiente && (
+        <CambiarAmbienteModal
+          company={company}
+          onClose={() => setShowCambiarAmbiente(false)}
+          onUpdated={(newAmbiente, newKey) => {
+            setCompany((c) => c ? { ...c, amb: newAmbiente } : c);
+            setCurrentApiKey(newKey);
+            setShowKey(true);
+            setShowCambiarAmbiente(false);
+            toast(`Ambiente cambiado a ${newAmbiente} — nueva API Key activa`);
           }}
         />
       )}

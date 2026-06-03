@@ -9,7 +9,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function generateApiKey(prefix: 'vja_live' | 'vja_test' = 'vja_live'): string {
+function generateApiKey(prefix: 'vja_live' | 'vja_cert' | 'vja_test' = 'vja_live'): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const arr = new Uint8Array(24);
   crypto.getRandomValues(arr);
@@ -503,7 +503,7 @@ export interface CreateCompanyInput {
 }
 
 export async function createCompany(input: CreateCompanyInput): Promise<Company> {
-  const apiKey = generateApiKey(input.ambiente === 'testeCF' ? 'vja_test' : 'vja_live');
+  const apiKey = generateApiKey(ambToPrefix(input.ambiente));
 
   if (!supabase) {
     const c: Company = {
@@ -578,8 +578,15 @@ export async function updateCompanyPlan(
   await insertAuditLog(`Cambió plan a ${plan}`, razon);
 }
 
-export async function regenerateApiKey(id: string, razon: string): Promise<string> {
-  const newKey = generateApiKey('vja_live');
+function ambToPrefix(amb: string): 'vja_live' | 'vja_cert' | 'vja_test' {
+  const n = amb.toLowerCase();
+  if (n === 'ecf') return 'vja_live';
+  if (n === 'certecf') return 'vja_cert';
+  return 'vja_test';
+}
+
+export async function regenerateApiKey(id: string, razon: string, amb: string): Promise<string> {
+  const newKey = generateApiKey(ambToPrefix(amb));
   if (!supabase) return newKey;
   const { error } = await supabase
     .from('companies')
@@ -587,6 +594,22 @@ export async function regenerateApiKey(id: string, razon: string): Promise<strin
     .eq('id', id);
   if (error) throw new Error(error.message);
   await insertAuditLog('Regeneró API Key', razon);
+  return newKey;
+}
+
+export async function updateCompanyAmbiente(
+  id: string,
+  newAmbiente: string,
+  razon: string,
+): Promise<string> {
+  const newKey = generateApiKey(ambToPrefix(newAmbiente));
+  if (!supabase) return newKey;
+  const { error } = await supabase
+    .from('companies')
+    .update({ ambiente: newAmbiente, api_key: newKey })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+  await insertAuditLog(`Cambió ambiente a ${newAmbiente} — API Key regenerada`, razon);
   return newKey;
 }
 
