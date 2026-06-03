@@ -25,6 +25,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [secuencias, setSecuencias] = useState<Secuencia[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState<'secuencias' | 'facturas'>('secuencias');
   const [showKey, setShowKey] = useState(false);
   const [currentApiKey, setCurrentApiKey] = useState('');
@@ -42,6 +43,11 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       getFacturasForCliente(id),
       getSecuencias(id),
     ]).then(([co, fa, se]) => {
+      if (!co) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
       setCompany(co);
       setFacturas(fa);
       setSecuencias(se);
@@ -113,6 +119,22 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   };
 
   if (loading || !company) {
+    if (notFound) {
+      return (
+        <div className="content-wrap">
+          <div style={{ padding: '60px 0', textAlign: 'center' }}>
+            <h2 style={{ marginBottom: 8 }}>Cliente no encontrado</h2>
+            <p className="muted" style={{ marginBottom: 18, fontSize: 13.5 }}>
+              El registro fue eliminado o no existe en Supabase.
+            </p>
+            <button className="btn" onClick={() => router.push('/admin/clientes')}>
+              <Icon name="chevleft" />Volver a Clientes
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="content-wrap">
         <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13.5 }}>

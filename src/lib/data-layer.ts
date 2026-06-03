@@ -1,9 +1,17 @@
 import { supabase } from './supabase';
 import type { Company, Factura, Secuencia, ContingenciaItem, ContingenciaHist, DgiiService, AuditLog, DonutItem } from '@/types';
 import {
-  CLIENTES, FACTURAS, SECUENCIAS, CONTINGENCIA_QUEUE, CONTINGENCIA_HIST,
+  CONTINGENCIA_QUEUE, CONTINGENCIA_HIST,
   AUDIT_LOG, DGII_SERVICES, COMARK, PLAN_LIMITS, ECF_TYPES,
 } from './data';
+import {
+  buildLegacyCompanyInsertPayload,
+  buildLegacyEstadoUpdate,
+  buildModernCompanyInsertPayload,
+  isLegacySchemaMismatch,
+  normalizeCompanyAmbiente,
+  normalizeCompanyEstado,
+} from './company-schema';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
@@ -43,19 +51,31 @@ function normalizePlan(raw: unknown): Company['plan'] {
   return valid.find((v) => v === raw) ?? 'Pro';
 }
 
+function buildAlias(raw: unknown, razon: string): string {
+  const alias = String(raw || '').trim();
+  if (alias) return alias;
+  return razon
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.slice(0, 4).toUpperCase())
+    .join('')
+    .slice(0, 20);
+}
+
 function mapCompany(row: Record<string, unknown>, idx: number): Company {
   const plan = normalizePlan(row.plan);
+  const razon = String(row.razon_social || row.razon || '');
   return {
     id: String(row.id),
     rnc: String(row.rnc || ''),
-    razon: String(row.razon_social || row.razon || ''),
-    alias: String(row.nombre_comercial || row.alias || ''),
+    razon,
+    alias: buildAlias(row.nombre_comercial || row.alias, razon),
     plan,
-    estado: String(row.estado || 'Pendiente') as Company['estado'],
-    amb: String(row.ambiente || row.amb || 'testeCF'),
+    estado: normalizeCompanyEstado(row),
+    amb: normalizeCompanyAmbiente(row.ambiente || row.amb || 'testeCF'),
     facturasMes: Number(row.facturas_mes ?? row.facturasMes ?? 0),
-    limite: PLAN_LIMITS[plan]?.facturas ?? 500,
-    cert: String(row.certificado_estado || row.cert || 'Pendiente'),
+    limite: Number(row.limite_facturas_mes ?? PLAN_LIMITS[plan]?.facturas ?? 500),
+    cert: String(row.certificado_estado || (row.certificado_path ? 'Vigente' : row.cert) || 'Pendiente'),
     certVence: String(row.certificado_vence || row.certVence || '—'),
     apiKey: String(row.api_key || row.apiKey || ''),
     ingresoMes: PLAN_LIMITS[plan]?.precio ?? 0,
@@ -126,53 +146,55 @@ function mapAuditLog(row: Record<string, unknown>): AuditLog {
 // ─── READ: Companies ───────────────────────────────────────────────────────────
 
 export async function getClientes(): Promise<Company[]> {
-  if (!supabase) return CLIENTES;
+  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from('companies')
       .select('*')
       .order('created_at', { ascending: false });
-    if (error || !data?.length) return CLIENTES;
+    if (error) return [];
+    if (!data?.length) return [];
     return data.map((row, idx) => mapCompany(row as Record<string, unknown>, idx));
   } catch {
-    return CLIENTES;
+    return [];
   }
 }
 
-export async function getClienteById(id: string): Promise<Company> {
-  if (!supabase) return CLIENTES.find((c) => c.id === id) ?? CLIENTES[0];
+export async function getClienteById(id: string): Promise<Company | null> {
+  if (!supabase) return null;
   try {
     const { data, error } = await supabase
       .from('companies')
       .select('*')
       .eq('id', id)
       .single();
-    if (error || !data) return CLIENTES.find((c) => c.id === id) ?? CLIENTES[0];
+    if (error || !data) return null;
     return mapCompany(data as Record<string, unknown>, 0);
   } catch {
-    return CLIENTES.find((c) => c.id === id) ?? CLIENTES[0];
+    return null;
   }
 }
 
 // ─── READ: Facturas ────────────────────────────────────────────────────────────
 
 export async function getFacturas(): Promise<Factura[]> {
-  if (!supabase) return FACTURAS;
+  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from('ecf_documents')
       .select('*, companies(razon_social, rnc)')
       .order('created_at', { ascending: false })
       .limit(200);
-    if (error || !data?.length) return FACTURAS;
+    if (error) return [];
+    if (!data?.length) return [];
     return data.map((row) => mapFactura(row as Record<string, unknown>));
   } catch {
-    return FACTURAS;
+    return [];
   }
 }
 
 export async function getFacturasForCliente(companyId: string): Promise<Factura[]> {
-  if (!supabase) return FACTURAS.filter((f) => f.clienteId === companyId).slice(0, 6);
+  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from('ecf_documents')
@@ -180,10 +202,11 @@ export async function getFacturasForCliente(companyId: string): Promise<Factura[
       .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(6);
-    if (error || !data?.length) return FACTURAS.filter((f) => f.clienteId === companyId).slice(0, 6);
+    if (error) return [];
+    if (!data?.length) return [];
     return data.map((row) => mapFactura(row as Record<string, unknown>));
   } catch {
-    return FACTURAS.filter((f) => f.clienteId === companyId).slice(0, 6);
+    return [];
   }
 }
 
@@ -262,17 +285,18 @@ export async function getDonutTipos(): Promise<DonutItem[]> {
 // ─── READ: Sequences ──────────────────────────────────────────────────────────
 
 export async function getSecuencias(companyId: string): Promise<Secuencia[]> {
-  if (!supabase) return SECUENCIAS;
+  if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from('sequences')
       .select('*')
       .eq('company_id', companyId)
       .order('tipo_ecf', { ascending: true });
-    if (error || !data?.length) return SECUENCIAS;
+    if (error) return [];
+    if (!data?.length) return [];
     return data.map((row) => mapSecuencia(row as Record<string, unknown>));
   } catch {
-    return SECUENCIAS;
+    return [];
   }
 }
 
@@ -513,47 +537,27 @@ export interface CreateCompanyInput {
 
 export async function createCompany(input: CreateCompanyInput): Promise<Company> {
   const apiKey = generateApiKey(ambToPrefix(input.ambiente));
+  const planLimit = PLAN_LIMITS[input.plan]?.facturas ?? 500;
 
-  if (!supabase) {
-    const c: Company = {
-      id: 'demo-' + Date.now(),
-      rnc: input.rnc,
-      razon: input.razonSocial,
-      alias: input.alias,
-      plan: input.plan,
-      estado: 'Pendiente',
-      amb: input.ambiente,
-      facturasMes: 0,
-      limite: PLAN_LIMITS[input.plan]?.facturas ?? 500,
-      cert: 'Pendiente',
-      certVence: '—',
-      apiKey,
-      ingresoMes: PLAN_LIMITS[input.plan]?.precio ?? 0,
-      mark: 0,
-    };
-    return c;
-  }
+  if (!supabase) throw new Error('Supabase no configurado');
 
-  const { data, error } = await supabase
+  let result = await supabase
     .from('companies')
-    .insert({
-      rnc: input.rnc,
-      razon_social: input.razonSocial,
-      nombre_comercial: input.alias,
-      plan: input.plan,
-      estado: 'Pendiente',
-      ambiente: input.ambiente,
-      facturas_mes: 0,
-      certificado_estado: 'Pendiente',
-      certificado_vence: '—',
-      api_key: apiKey,
-    })
+    .insert(buildModernCompanyInsertPayload(input, apiKey))
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (isLegacySchemaMismatch(result.error)) {
+    result = await supabase
+      .from('companies')
+      .insert(buildLegacyCompanyInsertPayload(input, apiKey, planLimit))
+      .select()
+      .single();
+  }
+
+  if (result.error) throw new Error(result.error.message);
   await insertAuditLog('Nuevo cliente registrado', input.razonSocial);
-  return mapCompany(data as Record<string, unknown>, 0);
+  return mapCompany(result.data as Record<string, unknown>, 0);
 }
 
 export async function updateCompanyEstado(
@@ -562,11 +566,19 @@ export async function updateCompanyEstado(
   razon: string,
 ): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase
+  let result = await supabase
     .from('companies')
     .update({ estado })
     .eq('id', id);
-  if (error) throw new Error(error.message);
+
+  if (isLegacySchemaMismatch(result.error)) {
+    result = await supabase
+      .from('companies')
+      .update(buildLegacyEstadoUpdate(estado))
+      .eq('id', id);
+  }
+
+  if (result.error) throw new Error(result.error.message);
   await insertAuditLog(
     estado === 'Suspendido' ? 'Suspendió cliente' : 'Activó cliente',
     razon,
