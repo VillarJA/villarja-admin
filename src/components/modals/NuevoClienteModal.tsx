@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Icon } from '@/components/Icons';
 import { createCompany } from '@/lib/data-layer';
+import { buscarRNC } from '@/lib/padron';
 import type { Company } from '@/types';
 
 interface Props {
@@ -17,7 +18,44 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
   const [plan, setPlan] = useState<Company['plan']>('Pro');
   const [amb, setAmb] = useState('eCF');
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [padronStatus, setPadronStatus] = useState<'idle' | 'found' | 'notfound'>('idle');
   const [error, setError] = useState('');
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleRncChange = (value: string) => {
+    setRnc(value);
+    setPadronStatus('idle');
+
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    const clean = value.replace(/\D/g, '');
+    if (clean.length < 9) return;
+
+    searchTimeout.current = setTimeout(async () => {
+      setSearching(true);
+      const result = await buscarRNC(clean);
+      setSearching(false);
+
+      if (result) {
+        setPadronStatus('found');
+        // Auto-fill only if fields are empty (don't overwrite manual input)
+        if (!razon) setRazon(result.nombre);
+        if (!alias) {
+          const words = result.nombreComercial || result.nombre;
+          setAlias(
+            words
+              .split(/\s+/)
+              .map((w) => w.slice(0, 4).toUpperCase())
+              .join('')
+              .slice(0, 20)
+          );
+        }
+      } else {
+        setPadronStatus('notfound');
+      }
+    }, 600);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,17 +103,56 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* RNC with padron lookup */}
           <div>
-            <label className="cfg-label">RNC *</label>
-            <input
-              className="cfg-inp mono"
-              value={rnc}
-              onChange={(e) => setRnc(e.target.value)}
-              placeholder="101234567"
-              maxLength={11}
-              required
-            />
+            <label className="cfg-label">RNC / Cédula *</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                className="cfg-inp mono"
+                value={rnc}
+                onChange={(e) => handleRncChange(e.target.value)}
+                placeholder="101234567"
+                maxLength={11}
+                required
+                style={{ paddingRight: 34 }}
+              />
+              {searching && (
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  fontSize: 11, color: 'var(--text-muted)',
+                }}>
+                  ⟳
+                </span>
+              )}
+              {!searching && padronStatus === 'found' && (
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: 'var(--ok)',
+                }}>
+                  <Icon name="check" style={{ width: 15, height: 15 }} />
+                </span>
+              )}
+              {!searching && padronStatus === 'notfound' && (
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
+                }}>
+                  <Icon name="warning" style={{ width: 15, height: 15 }} />
+                </span>
+              )}
+            </div>
+            {padronStatus === 'found' && (
+              <p style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 4 }}>
+                ✓ Encontrado en el padrón DGII — datos auto-completados
+              </p>
+            )}
+            {padronStatus === 'notfound' && (
+              <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                No encontrado en el padrón — verifica el RNC o ingresa los datos manualmente
+              </p>
+            )}
           </div>
+
           <div>
             <label className="cfg-label">Razón Social *</label>
             <input
@@ -86,6 +163,7 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
               required
             />
           </div>
+
           <div>
             <label className="cfg-label">Alias (nombre corto) *</label>
             <input
@@ -97,6 +175,7 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
               required
             />
           </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="cfg-label">Plan</label>
@@ -124,7 +203,7 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
             <button type="button" className="btn" onClick={onClose} disabled={loading}>Cancelar</button>
-            <button type="submit" className="btn primary" disabled={loading}>
+            <button type="submit" className="btn primary" disabled={loading || searching}>
               {loading ? 'Creando…' : <><Icon name="plus" />Crear Cliente</>}
             </button>
           </div>

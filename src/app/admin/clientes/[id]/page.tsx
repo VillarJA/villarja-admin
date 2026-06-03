@@ -122,7 +122,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const pl = PLAN_LIMITS[company.plan];
+  const pl = PLAN_LIMITS[company.plan] ?? PLAN_LIMITS['Pro'];
   const maskedKey = currentApiKey.slice(0, 12) + '••••••••••••••••';
   const certCls = company.cert === 'Vigente' ? 'ok' : company.cert === 'Por vencer' ? 'warn' : company.cert === 'Vencido' ? 'err' : 'draft';
 

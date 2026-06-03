@@ -34,8 +34,17 @@ async function insertAuditLog(accion: string, obj: string): Promise<void> {
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
+function normalizePlan(raw: unknown): Company['plan'] {
+  const s = String(raw || '').toLowerCase();
+  if (s === 'básico' || s === 'basico') return 'Básico';
+  if (s === 'enterprise') return 'Enterprise';
+  if (s === 'pro') return 'Pro';
+  const valid: Company['plan'][] = ['Básico', 'Pro', 'Enterprise'];
+  return valid.find((v) => v === raw) ?? 'Pro';
+}
+
 function mapCompany(row: Record<string, unknown>, idx: number): Company {
-  const plan = String(row.plan || 'Básico') as Company['plan'];
+  const plan = normalizePlan(row.plan);
   return {
     id: String(row.id),
     rnc: String(row.rnc || ''),
