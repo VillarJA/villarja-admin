@@ -22,5 +22,6 @@ CREATE TABLE IF NOT EXISTS portal_config (
 INSERT INTO portal_config (id) VALUES (true) ON CONFLICT DO NOTHING;
 
 ALTER TABLE portal_config ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "authenticated" ON portal_config
+DROP POLICY IF EXISTS "authenticated" ON portal_config;
+CREATE POLICY "authenticated" ON portal_config
   FOR ALL USING (auth.role() = 'authenticated');

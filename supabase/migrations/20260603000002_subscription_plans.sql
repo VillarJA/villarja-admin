@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
 );
 
 ALTER TABLE subscription_plans ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "authenticated" ON subscription_plans
+DROP POLICY IF EXISTS "authenticated" ON subscription_plans;
+CREATE POLICY "authenticated" ON subscription_plans
   FOR ALL USING (auth.role() = 'authenticated');
 
 INSERT INTO subscription_plans (id, nombre, precio, facturas_limite, tipos_ecf, empresas_limite, descripcion, popular, features)

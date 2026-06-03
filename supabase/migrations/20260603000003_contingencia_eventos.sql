@@ -8,5 +8,6 @@ CREATE TABLE IF NOT EXISTS contingencia_eventos (
 );
 
 ALTER TABLE contingencia_eventos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "authenticated" ON contingencia_eventos
+DROP POLICY IF EXISTS "authenticated" ON contingencia_eventos;
+CREATE POLICY "authenticated" ON contingencia_eventos
   FOR ALL USING (auth.role() = 'authenticated');
