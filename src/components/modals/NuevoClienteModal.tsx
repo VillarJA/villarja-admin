@@ -19,7 +19,8 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
   const [amb, setAmb] = useState('eCF');
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [padronStatus, setPadronStatus] = useState<'idle' | 'found' | 'notfound'>('idle');
+  const [padronStatus, setPadronStatus] = useState<'idle' | 'found' | 'suspended' | 'notfound'>('idle');
+  const [padronActividad, setPadronActividad] = useState('');
   const [error, setError] = useState('');
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,13 +39,14 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
       setSearching(false);
 
       if (result) {
-        setPadronStatus('found');
+        setPadronStatus(result.activo ? 'found' : 'suspended');
+        setPadronActividad(result.actividad);
         // Auto-fill only if fields are empty (don't overwrite manual input)
         if (!razon) setRazon(result.nombre);
         if (!alias) {
-          const words = result.nombreComercial || result.nombre;
+          const source = result.nombreComercial || result.nombre;
           setAlias(
-            words
+            source
               .split(/\s+/)
               .map((w) => w.slice(0, 4).toUpperCase())
               .join('')
@@ -53,6 +55,7 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
         }
       } else {
         setPadronStatus('notfound');
+        setPadronActividad('');
       }
     }, 600);
   };
@@ -143,7 +146,12 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
             </div>
             {padronStatus === 'found' && (
               <p style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 4 }}>
-                ✓ Encontrado en el padrón DGII — datos auto-completados
+                ✓ Encontrado en el padrón DGII{padronActividad ? ` · ${padronActividad}` : ''}
+              </p>
+            )}
+            {padronStatus === 'suspended' && (
+              <p style={{ fontSize: 11.5, color: 'var(--warn)', marginTop: 4 }}>
+                ⚠ Contribuyente SUSPENDIDO en el padrón DGII — verifica antes de registrar
               </p>
             )}
             {padronStatus === 'notfound' && (

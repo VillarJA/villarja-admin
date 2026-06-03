@@ -7,11 +7,13 @@ const PADRON_KEY  = process.env.NEXT_PUBLIC_DGII_PADRON_ANON_KEY ?? '';
 
 export interface PadronResult {
   rnc: string;
-  nombre: string;       // Razón social / nombre
-  nombreComercial: string;
-  tipo: string;         // 'JURIDICO' | 'FISICO'
-  estado: string;       // 'ACTIVO' | 'SUSPENDIDO' | 'INACTIVO'
+  nombre: string;          // Razón social
+  nombreComercial: string; // Nombre comercial (puede ser null)
+  estado: string;          // 'ACTIVO' | 'SUSPENDIDO' | 'INACTIVO'
   actividad: string;
+  regimenPago: string;
+  fechaInicio: string;
+  activo: boolean;
 }
 
 // Query rnc_contribuyentes via Supabase REST. Returns null if not found or on error.
@@ -30,17 +32,20 @@ export async function buscarRNC(rnc: string): Promise<PadronResult | null> {
     });
 
     if (!res.ok) return null;
-    const rows: Record<string, string>[] = await res.json();
+    const rows: Record<string, string | null>[] = await res.json();
     if (!rows.length) return null;
 
     const r = rows[0];
+    const estado = String(r['estado'] ?? '').toUpperCase();
     return {
-      rnc:            r['rnc']               ?? r['numero_rnc']    ?? clean,
-      nombre:         r['nombre']            ?? r['razon_social']  ?? r['nombre_completo'] ?? '',
-      nombreComercial: r['nombre_comercial'] ?? r['nombre']        ?? '',
-      tipo:           r['tipo_rnc']          ?? r['tipo']          ?? '',
-      estado:         r['estado']            ?? '',
-      actividad:      r['actividad_economica'] ?? r['actividad']   ?? '',
+      rnc:            String(r['rnc'] ?? clean),
+      nombre:         String(r['nombre'] ?? ''),
+      nombreComercial: String(r['nombre_comerc'] ?? ''),
+      estado,
+      actividad:      String(r['actividad_economica'] ?? ''),
+      regimenPago:    String(r['regimen_pago'] ?? ''),
+      fechaInicio:    String(r['fecha_inicio_operaciones'] ?? ''),
+      activo:         estado === 'ACTIVO',
     };
   } catch {
     return null;
