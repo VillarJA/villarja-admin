@@ -719,12 +719,16 @@ export async function syncSecuenciasUsadas(
 ): Promise<Secuencia[]> {
   if (!supabase) throw new Error('Supabase no configurado');
 
-  // Count ALL documents per tipo_ecf — rejected e-CF still consume a sequence number.
-  // Sequences are only reusable in narrow DGII-approved cases (e.g. void before transmission).
+  // Count all transmitted documents per tipo_ecf.
+  // DGII rule: any e-CF sent to DGII consumes a sequence, including rejected ones.
+  // Exception: 'draft' state = never transmitted → sequence not consumed.
+  // Note: some rejection reasons (cert error, delegation) allow reuse of the same e-NCF,
+  // but distinguishing these requires a rejection_reason field not tracked here.
   const { data: docs, error: docsErr } = await supabase
     .from('ecf_documents')
     .select('tipo_ecf')
-    .eq('company_id', companyId);
+    .eq('company_id', companyId)
+    .neq('estado', 'draft');
 
   if (docsErr) throw new Error(docsErr.message);
 
