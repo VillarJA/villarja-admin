@@ -728,10 +728,17 @@ export async function uploadCertificate(
 ): Promise<void> {
   if (!supabase) throw new Error('Supabase no configurado');
   const base64 = await fileToBase64(file);
-  const { error } = await supabase
+  let { error } = await supabase
     .from('companies')
     .update({ certificado_data: base64, certificado_estado: 'Vigente' })
     .eq('id', companyId);
+  if (error && isLegacySchemaMismatch(error)) {
+    // certificado_estado column absent on legacy schema — update only the binary data
+    ({ error } = await supabase
+      .from('companies')
+      .update({ certificado_data: base64 })
+      .eq('id', companyId));
+  }
   if (error) {
     if (error.code === 'PGRST204' || error.code === '42703') {
       throw new Error(`Schema cache desactualizado (${error.code}): recarga el schema cache en Supabase Dashboard → Settings → API. Detalle: ${error.message}`);
