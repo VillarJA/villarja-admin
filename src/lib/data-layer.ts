@@ -711,6 +711,51 @@ export async function createDefaultSequencias(
   await insertAuditLog(`Creó ${inserts.length} secuencias automáticas (${norm})`, razonCliente);
 }
 
+// ─── SYNC SEQUENCES ───────────────────────────────────────────────────────────
+
+export async function syncSecuenciasUsadas(
+  companyId: string,
+  razon: string,
+): Promise<Secuencia[]> {
+  if (!supabase) throw new Error('Supabase no configurado');
+
+  // Count ALL documents per tipo_ecf — rejected e-CF still consume a sequence number.
+  // Sequences are only reusable in narrow DGII-approved cases (e.g. void before transmission).
+  const { data: docs, error: docsErr } = await supabase
+    .from('ecf_documents')
+    .select('tipo_ecf')
+    .eq('company_id', companyId);
+
+  if (docsErr) throw new Error(docsErr.message);
+
+  const counts: Record<number, number> = {};
+  for (const doc of (docs ?? [])) {
+    const tipo = Number((doc as Record<string, unknown>).tipo_ecf ?? 31);
+    counts[tipo] = (counts[tipo] || 0) + 1;
+  }
+
+  // Update each sequence row with the real document count
+  const { data: seqs, error: seqsErr } = await supabase
+    .from('sequences')
+    .select('tipo_ecf')
+    .eq('company_id', companyId);
+
+  if (seqsErr) throw new Error(seqsErr.message);
+
+  for (const seq of (seqs ?? [])) {
+    const tipo = Number((seq as Record<string, unknown>).tipo_ecf);
+    const usadas = counts[tipo] ?? 0;
+    await supabase
+      .from('sequences')
+      .update({ usadas })
+      .eq('company_id', companyId)
+      .eq('tipo_ecf', tipo);
+  }
+
+  await insertAuditLog('Sincronizó contadores de secuencias e-NCF desde ecf_documents', razon);
+  return getSecuencias(companyId);
+}
+
 // ─── CERTIFICATE ──────────────────────────────────────────────────────────────
 
 function fileToBase64(file: File): Promise<string> {

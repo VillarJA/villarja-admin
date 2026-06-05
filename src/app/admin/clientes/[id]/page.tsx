@@ -11,6 +11,7 @@ import {
   getClienteById, getFacturasForCliente, getSecuencias,
   regenerateApiKey, updateCompanyEstado,
   uploadCertificate, updateCertPassword,
+  syncSecuenciasUsadas,
 } from '@/lib/data-layer';
 import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
 import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
@@ -37,6 +38,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [certPassword, setCertPassword] = useState('');
   const [showCertPassword, setShowCertPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [syncingSeq, setSyncingSeq] = useState(false);
   const [toastNode, toast] = useToast();
 
   useEffect(() => {
@@ -137,6 +139,20 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo guardar'));
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const handleSyncSecuencias = async () => {
+    if (!company) return;
+    setSyncingSeq(true);
+    try {
+      const updated = await syncSecuenciasUsadas(company.id, company.razon);
+      setSecuencias(updated);
+      toast('Contadores sincronizados con el historial de e-CF emitidos');
+    } catch (err) {
+      toast('Error al sincronizar: ' + (err instanceof Error ? err.message : 'Intenta de nuevo'));
+    } finally {
+      setSyncingSeq(false);
     }
   };
 
@@ -357,9 +373,20 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           <div>
             <div className="toolbar" style={{ justifyContent: 'space-between' }}>
               <span className="muted" style={{ fontSize: 12.5 }}>{secuencias.length} secuencias autorizadas por la DGII</span>
-              <button className="btn sm primary" onClick={() => setShowCrearSeq(true)}>
-                <Icon name="plus" />Crear Secuencia
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn sm"
+                  onClick={handleSyncSecuencias}
+                  disabled={syncingSeq}
+                  title="Recalcula los contadores de 'Usadas' contando los e-CF emitidos en ecf_documents"
+                >
+                  <Icon name="refresh" style={{ opacity: syncingSeq ? 0.5 : 1 }} />
+                  {syncingSeq ? 'Sincronizando…' : 'Sincronizar contadores'}
+                </button>
+                <button className="btn sm primary" onClick={() => setShowCrearSeq(true)}>
+                  <Icon name="plus" />Crear Secuencia
+                </button>
+              </div>
             </div>
             {secuencias.length === 0 ? (
               <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
