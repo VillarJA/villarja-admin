@@ -745,6 +745,7 @@ export async function uploadCertificate(
     // Legacy schema: certificado_estado column absent — update only safe columns
     const legacyUpdate: Record<string, unknown> = { certificado_data: base64 };
     if (certMeta?.subject) legacyUpdate.certificado_subject = certMeta.subject;
+    if (certMeta?.vence) legacyUpdate.certificado_vence = certMeta.vence;
     ({ error } = await supabase
       .from('companies')
       .update(legacyUpdate)

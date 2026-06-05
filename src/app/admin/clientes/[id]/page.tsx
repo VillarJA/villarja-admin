@@ -132,7 +132,6 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     setSavingPassword(true);
     try {
       await updateCertPassword(company.id, certPassword, company.razon);
-      setCertPassword('');
       toast('Contraseña del certificado guardada');
     } catch (err) {
       toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo guardar'));
