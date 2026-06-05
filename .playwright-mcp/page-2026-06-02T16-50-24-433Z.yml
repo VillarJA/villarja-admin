@@ -1,0 +1,52 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: VJ
+        - generic [ref=e7]:
+          - generic [ref=e8]: Villar JA
+          - generic [ref=e9]: Data y Tecnología
+      - generic [ref=e10]:
+        - heading "Plataforma de Facturación Electrónica e-CF" [level=2] [ref=e11]
+        - paragraph [ref=e12]: Panel de administración para emisión de comprobantes fiscales electrónicos ante la DGII. Gestiona clientes, secuencias e-NCF, certificados y contingencia desde un solo lugar.
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - generic [ref=e15]: 1.2M
+          - text: e-CF emitidos / mes
+        - generic [ref=e16]:
+          - generic [ref=e17]: 99.4%
+          - text: tasa de aceptación
+        - generic [ref=e18]:
+          - generic [ref=e19]: 240+
+          - text: empresas activas
+    - generic [ref=e21]:
+      - img "Villar JA Data y Tecnología" [ref=e57]
+      - heading "Iniciar sesión" [level=1] [ref=e28]
+      - paragraph [ref=e29]: Accede al portal de administración e-CF
+      - generic [ref=e75]:
+        - img [ref=e76]
+        - generic [ref=e78]: Credenciales incorrectas. Verifica tu correo y contraseña.
+      - generic [ref=e30]:
+        - generic [ref=e31]: Correo electrónico
+        - generic [ref=e32]:
+          - img [ref=e33]
+          - textbox "tu@empresa.com" [ref=e36]: admin@villarja.com
+      - generic [ref=e37]:
+        - generic [ref=e38]: Contraseña
+        - generic [ref=e39]:
+          - img [ref=e40]
+          - textbox "••••••••" [ref=e43]: Villar26@!
+          - button [ref=e44] [cursor=pointer]:
+            - img [ref=e45]
+      - generic [ref=e48]:
+        - generic [ref=e49] [cursor=pointer]:
+          - img [ref=e51]
+          - text: Recordarme
+        - link "¿Olvidaste tu contraseña?" [ref=e53] [cursor=pointer]:
+          - /url: "#"
+      - button "Entrar al portal" [ref=e54] [cursor=pointer]
+      - button "Entrar en modo demo" [ref=e55] [cursor=pointer]
+      - generic [ref=e56]: Protegido con autenticación de 2 factores · ecf.villarja.com
+  - button "Open Next.js Dev Tools" [ref=e70] [cursor=pointer]:
+    - img [ref=e71]
+  - alert [ref=e74]

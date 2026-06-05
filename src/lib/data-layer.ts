@@ -77,6 +77,7 @@ function mapCompany(row: Record<string, unknown>, idx: number): Company {
     limite: Number(row.limite_facturas_mes ?? PLAN_LIMITS[plan]?.facturas ?? 500),
     cert: String(row.certificado_estado || (row.certificado_path ? 'Vigente' : row.cert) || 'Pendiente'),
     certVence: String(row.certificado_vence || row.certVence || '—'),
+    certSubject: row.certificado_subject ? String(row.certificado_subject) : undefined,
     certPassword: String(row.certificado_password || row.certPassword || ''),
     apiKey: String(row.api_key || row.apiKey || ''),
     ingresoMes: PLAN_LIMITS[plan]?.precio ?? 0,
@@ -725,18 +726,28 @@ export async function uploadCertificate(
   companyId: string,
   file: File,
   razon: string,
+  certMeta?: { subject: string; vence: string },
 ): Promise<void> {
   if (!supabase) throw new Error('Supabase no configurado');
   const base64 = await fileToBase64(file);
+  const update: Record<string, unknown> = {
+    certificado_data: base64,
+    certificado_estado: 'Vigente',
+  };
+  if (certMeta?.subject) update.certificado_subject = certMeta.subject;
+  if (certMeta?.vence) update.certificado_vence = certMeta.vence;
+
   let { error } = await supabase
     .from('companies')
-    .update({ certificado_data: base64, certificado_estado: 'Vigente' })
+    .update(update)
     .eq('id', companyId);
   if (error && isLegacySchemaMismatch(error)) {
-    // certificado_estado column absent on legacy schema — update only the binary data
+    // Legacy schema: certificado_estado column absent — update only safe columns
+    const legacyUpdate: Record<string, unknown> = { certificado_data: base64 };
+    if (certMeta?.subject) legacyUpdate.certificado_subject = certMeta.subject;
     ({ error } = await supabase
       .from('companies')
-      .update({ certificado_data: base64 })
+      .update(legacyUpdate)
       .eq('id', companyId));
   }
   if (error) {

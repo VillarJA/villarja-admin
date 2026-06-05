@@ -10,6 +10,7 @@ export interface Company {
   limite: number;
   cert: string;
   certVence: string;
+  certSubject?: string;
   certPassword?: string;
   apiKey: string;
   ingresoMes: number;

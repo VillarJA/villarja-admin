@@ -21,6 +21,8 @@ export function CrearSecuenciaModal({ company, onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const MAX_RANGE = 10_000_000;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const desdeN = parseInt(desde, 10);
@@ -29,7 +31,15 @@ export function CrearSecuenciaModal({ company, onClose, onCreated }: Props) {
       setError('El rango debe ser válido (desde < hasta, desde ≥ 1).');
       return;
     }
+    if (hastaN - desdeN + 1 > MAX_RANGE) {
+      setError(`El rango no puede superar ${MAX_RANGE.toLocaleString()} secuencias (límite DGII).`);
+      return;
+    }
     if (!vence) { setError('La fecha de vencimiento es requerida.'); return; }
+    if (new Date(vence) <= new Date()) {
+      setError('La fecha de vencimiento debe ser una fecha futura.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {

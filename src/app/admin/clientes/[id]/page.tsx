@@ -101,10 +101,26 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     const file = e.target.files?.[0];
     if (!file || !company) return;
     setUploadError('');
+    let certMeta: { subject: string; vence: string } | undefined;
+    if (certPassword.trim()) {
+      try {
+        const fd = new FormData();
+        fd.append('cert', file);
+        fd.append('password', certPassword);
+        const res = await fetch('/api/parse-cert', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (res.ok) certMeta = { subject: json.subject ?? '', vence: json.vence ?? '' };
+      } catch { /* parsing failed — upload without metadata */ }
+    }
     try {
-      await uploadCertificate(company.id, file, company.razon);
+      await uploadCertificate(company.id, file, company.razon, certMeta);
       toast('Certificado subido exitosamente');
-      setCompany((c) => c ? { ...c, cert: 'Vigente' } : c);
+      setCompany((c) => c ? {
+        ...c,
+        cert: 'Vigente',
+        certSubject: certMeta?.subject || c.certSubject,
+        certVence: certMeta?.vence || c.certVence,
+      } : c);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Error al subir el certificado');
     }
@@ -241,6 +257,12 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             <span className="muted" style={{ fontSize: 12.5 }}>Estado</span>
             <Badge cls={certCls}>{company.cert}</Badge>
           </div>
+          {company.certSubject && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span className="muted" style={{ fontSize: 12.5 }}>Titular</span>
+              <span className="strong" style={{ fontSize: 12.5, textAlign: 'right', maxWidth: 160 }}>{company.certSubject}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <span className="muted" style={{ fontSize: 12.5 }}>Vencimiento</span>
             <span className="strong mono">{company.certVence}</span>
