@@ -35,6 +35,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [suspendiendo, setSuspendiendo] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [certPassword, setCertPassword] = useState('');
+  const [showCertPassword, setShowCertPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [toastNode, toast] = useToast();
 
@@ -53,6 +54,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       setFacturas(fa);
       setSecuencias(se);
       setCurrentApiKey(co.apiKey);
+      if (co.certPassword) setCertPassword(co.certPassword);
       setLoading(false);
     });
   }, [id]);
@@ -258,17 +260,32 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
               Contraseña del .p12
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={certPassword}
-                onChange={(e) => setCertPassword(e.target.value)}
-                style={{
-                  flex: 1, fontSize: 13, padding: '5px 8px',
-                  border: '1px solid var(--border)', borderRadius: 6,
-                  background: 'var(--surface)', color: 'var(--text)',
-                }}
-              />
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  type={showCertPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={certPassword}
+                  onChange={(e) => setCertPassword(e.target.value)}
+                  style={{
+                    width: '100%', fontSize: 13, padding: '5px 30px 5px 8px',
+                    border: '1px solid var(--border)', borderRadius: 6,
+                    background: 'var(--surface)', color: 'var(--text)',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCertPassword((v) => !v)}
+                  style={{
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    color: 'var(--muted)', display: 'flex', alignItems: 'center',
+                  }}
+                  title={showCertPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <Icon name={showCertPassword ? 'eyeoff' : 'eye'} style={{ width: 15, height: 15 }} />
+                </button>
+              </div>
               <button
                 className="btn sm"
                 onClick={handleSavePassword}

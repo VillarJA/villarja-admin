@@ -9,3 +9,5 @@ BEGIN
     ALTER TABLE public.sequences ADD COLUMN ambiente TEXT NOT NULL DEFAULT 'certecf';
   END IF;
 END $$;
+
+NOTIFY pgrst, 'reload schema';

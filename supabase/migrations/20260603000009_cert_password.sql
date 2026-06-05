@@ -16,3 +16,6 @@ BEGIN
     ALTER TABLE public.companies ADD COLUMN certificado_password TEXT;
   END IF;
 END $$;
+
+-- Reload PostgREST schema cache so new columns are immediately visible via the API
+NOTIFY pgrst, 'reload schema';

@@ -77,6 +77,7 @@ function mapCompany(row: Record<string, unknown>, idx: number): Company {
     limite: Number(row.limite_facturas_mes ?? PLAN_LIMITS[plan]?.facturas ?? 500),
     cert: String(row.certificado_estado || (row.certificado_path ? 'Vigente' : row.cert) || 'Pendiente'),
     certVence: String(row.certificado_vence || row.certVence || '—'),
+    certPassword: String(row.certificado_password || row.certPassword || ''),
     apiKey: String(row.api_key || row.apiKey || ''),
     ingresoMes: PLAN_LIMITS[plan]?.precio ?? 0,
     mark: idx % COMARK.length,
@@ -733,9 +734,9 @@ export async function uploadCertificate(
     .eq('id', companyId);
   if (error) {
     if (error.code === 'PGRST204' || error.code === '42703') {
-      throw new Error('Ejecuta la migración 20260603000009_cert_password.sql en Supabase primero');
+      throw new Error(`Schema cache desactualizado (${error.code}): recarga el schema cache en Supabase Dashboard → Settings → API. Detalle: ${error.message}`);
     }
-    throw new Error(error.message);
+    throw new Error(`[${error.code}] ${error.message}`);
   }
   await insertAuditLog('Subió certificado .p12', razon);
 }
@@ -752,9 +753,9 @@ export async function updateCertPassword(
     .eq('id', companyId);
   if (error) {
     if (error.code === 'PGRST204' || error.code === '42703') {
-      throw new Error('Ejecuta la migración 20260603000009_cert_password.sql en Supabase primero');
+      throw new Error(`Schema cache desactualizado (${error.code}): recarga el schema cache en Supabase Dashboard → Settings → API. Detalle: ${error.message}`);
     }
-    throw new Error(error.message);
+    throw new Error(`[${error.code}] ${error.message}`);
   }
   await insertAuditLog('Actualizó contraseña de certificado', razon);
 }
