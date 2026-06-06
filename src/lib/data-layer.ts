@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Company, Factura, Secuencia, ContingenciaItem, ContingenciaHist, DgiiService, AuditLog, DonutItem } from '@/types';
+import type { Company, Factura, Recepcion, Secuencia, ContingenciaItem, ContingenciaHist, DgiiService, AuditLog, DonutItem } from '@/types';
 import {
   CONTINGENCIA_QUEUE, CONTINGENCIA_HIST,
   AUDIT_LOG, DGII_SERVICES, COMARK, PLAN_LIMITS, ECF_TYPES,
@@ -208,6 +208,38 @@ export async function getFacturasForCliente(companyId: string): Promise<Factura[
     if (error) return [];
     if (!data?.length) return [];
     return data.map((row) => mapFactura(row as Record<string, unknown>));
+  } catch {
+    return [];
+  }
+}
+
+// ─── READ: Recepciones (Protocolo Emisor-Receptor) ────────────────────────────
+
+export async function getRecepciones(): Promise<Recepcion[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('received_ecf_documents')
+      .select('*, companies(razon_social)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error || !data?.length) return [];
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      const co = (r['companies'] as Record<string, unknown> | null) ?? {};
+      return {
+        id:           String(r['id']            ?? ''),
+        companyId:    String(r['company_id']    ?? ''),
+        razonSocial:  String(co['razon_social'] ?? r['rnc_comprador'] ?? '—'),
+        rncEmisor:    String(r['rnc_emisor']    ?? '—'),
+        rncComprador: String(r['rnc_comprador'] ?? '—'),
+        encf:         String(r['encf']          ?? '—'),
+        tipoEcf:      r['tipo_ecf'] != null ? Number(r['tipo_ecf']) : null,
+        tipo:         (r['tipo'] === 'aprobacion' ? 'aprobacion' : 'ecf') as 'ecf' | 'aprobacion',
+        procesado:    Boolean(r['procesado']),
+        fecha:        new Date(String(r['created_at'])),
+      } satisfies Recepcion;
+    });
   } catch {
     return [];
   }

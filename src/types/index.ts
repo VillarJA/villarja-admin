@@ -96,3 +96,18 @@ export interface AdminUser {
   email: string;
   name: string;
 }
+
+export interface Recepcion {
+  id: string;
+  companyId: string;
+  razonSocial: string;   // nombre de nuestro cliente (el receptor o el emisor original)
+  rncEmisor: string;
+  rncComprador: string;
+  encf: string;
+  tipoEcf: number | null;
+  tipo: 'ecf' | 'aprobacion';
+  procesado: boolean;
+  fecha: Date;
+}
+
+export type RecepcionTipo = 'ecf' | 'aprobacion';

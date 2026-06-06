@@ -3,7 +3,7 @@
 import { Icon } from '@/components/Icons';
 import { LogoMark } from './Logo';
 
-export type RouteId = 'dashboard' | 'clientes' | 'facturas' | 'contingencia' | 'planes' | 'configuracion';
+export type RouteId = 'dashboard' | 'clientes' | 'facturas' | 'recepciones' | 'contingencia' | 'planes' | 'configuracion';
 
 const NAV: {
   group: string;
@@ -19,8 +19,9 @@ const NAV: {
     group: 'Facturación Electrónica',
     items: [
       { id: 'clientes',     label: 'Clientes',     icon: 'clientes' },
-      { id: 'facturas',     label: 'Emisión e-CF', icon: 'factura' },
-      { id: 'contingencia', label: 'Contingencia', icon: 'contingencia' },
+      { id: 'facturas',     label: 'Emisión e-CF',  icon: 'factura' },
+      { id: 'recepciones',  label: 'Recepciones',   icon: 'inbox' },
+      { id: 'contingencia', label: 'Contingencia',  icon: 'contingencia' },
       { id: 'planes',       label: 'Planes',       icon: 'planes' },
     ],
   },
