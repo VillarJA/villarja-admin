@@ -239,7 +239,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
         <div className="card card-pad">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Icon name="key" style={{ width: 17, height: 17, color: 'var(--brand)' }} />
-            <b style={{ fontSize: 13.5 }}>API Key (Producción)</b>
+            <b style={{ fontSize: 13.5 }}>API Key activa</b>
           </div>
           <div className="apikey-box">
             <code>{showKey ? currentApiKey : maskedKey}</code>
