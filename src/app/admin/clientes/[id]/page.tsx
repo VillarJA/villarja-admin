@@ -38,6 +38,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [showGestionarCert, setShowGestionarCert] = useState(false);
   const [confirmRegenKey, setConfirmRegenKey] = useState(false);
   const [syncingSeq, setSyncingSeq] = useState(false);
+  const [deletingEcfId, setDeletingEcfId] = useState<string | null>(null);
   const [toastNode, toast] = useToast();
 
   useEffect(() => {
@@ -142,6 +143,47 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const pl = PLAN_LIMITS[company.plan] ?? PLAN_LIMITS['Pro'];
   const maskedKey = currentApiKey.slice(0, 12) + '••••••••••••••••';
   const certCls = company.cert === 'Vigente' ? 'ok' : company.cert === 'Por vencer' ? 'warn' : company.cert === 'Vencido' ? 'err' : 'draft';
+
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
+
+  async function downloadEcfFile(ecfId: string, type: 'xml' | 'pdf', encf: string) {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/ecf/${ecfId}/${type}`, {
+        headers: { 'X-API-Key': currentApiKey },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = `${encf || ecfId}.${type}`;
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      toast('Error al descargar: ' + (err instanceof Error ? err.message : 'Intenta de nuevo'));
+    }
+  }
+
+  async function handleDeleteEcf(ecfId: string) {
+    if (!confirm('¿Eliminar este borrador? Esta acción no se puede deshacer.')) return;
+    setDeletingEcfId(ecfId);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/ecf/${ecfId}`, {
+        method: 'DELETE',
+        headers: { 'X-API-Key': currentApiKey },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      setFacturas((prev) => prev.filter((f) => f.id !== ecfId));
+      toast('Borrador eliminado');
+    } catch (err) {
+      toast('Error al eliminar: ' + (err instanceof Error ? err.message : 'Intenta de nuevo'));
+    } finally {
+      setDeletingEcfId(null);
+    }
+  }
 
   return (
     <div className="content-wrap fade-in">
@@ -404,13 +446,13 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                   <tr>
                     <th>eNCF</th><th>Tipo</th>
                     <th className="num">Monto</th><th className="num">ITBIS</th>
-                    <th>Fecha</th><th>Estado</th>
+                    <th>Fecha</th><th>Estado</th><th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {facturas.map((f) => (
                     <tr key={f.id}>
-                      <td className="mono">{f.encf}</td>
+                      <td className="mono">{f.encf || <span className="muted">—</span>}</td>
                       <td>
                         <span className="tag-type">{f.tipo}</span>{' '}
                         {ECF_TYPES[f.tipo]}
@@ -419,6 +461,39 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                       <td className="num muted">${fmtDOP(f.itbis)}</td>
                       <td className="muted">{fmtDateTime(f.fecha)}</td>
                       <td><EstadoBadge estado={f.estado} /></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button
+                            className="icon-btn"
+                            title="Descargar XML"
+                            disabled={!f.encf}
+                            onClick={() => downloadEcfFile(f.id, 'xml', f.encf)}
+                            style={{ opacity: f.encf ? 1 : 0.35 }}
+                          >
+                            <Icon name="download" size={14} />
+                          </button>
+                          <button
+                            className="icon-btn"
+                            title="Descargar PDF"
+                            disabled={!f.encf}
+                            onClick={() => downloadEcfFile(f.id, 'pdf', f.encf)}
+                            style={{ opacity: f.encf ? 1 : 0.35 }}
+                          >
+                            <Icon name="file" size={14} />
+                          </button>
+                          {f.estado === 'draft' && (
+                            <button
+                              className="icon-btn"
+                              title="Eliminar borrador"
+                              disabled={deletingEcfId === f.id}
+                              onClick={() => handleDeleteEcf(f.id)}
+                              style={{ color: 'var(--err, #e53e3e)', opacity: deletingEcfId === f.id ? 0.5 : 1 }}
+                            >
+                              <Icon name="trash" size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
