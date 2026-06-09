@@ -883,16 +883,15 @@ export async function updateCertPassword(
   password: string,
   razon: string,
 ): Promise<void> {
-  if (!supabase) throw new Error('Supabase no configurado');
-  const { error } = await supabase
-    .from('companies')
-    .update({ certificado_password: password })
-    .eq('id', companyId);
-  if (error) {
-    if (error.code === 'PGRST204' || error.code === '42703') {
-      throw new Error(`Schema cache desactualizado (${error.code}): recarga el schema cache en Supabase Dashboard → Settings → API. Detalle: ${error.message}`);
-    }
-    throw new Error(`[${error.code}] ${error.message}`);
+  // Encrypt server-side via /api/cert-password to avoid storing plain text in DB.
+  const res = await fetch('/api/cert-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyId, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Error al guardar contraseña (${res.status})`);
   }
   await insertAuditLog('Actualizó contraseña de certificado', razon);
 }
