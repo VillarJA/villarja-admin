@@ -401,7 +401,7 @@ export function CertificacionModal({ company, onClose }: Props) {
                   {Object.entries(counts).map(([estado, n]) => (
                     <span
                       key={estado}
-                      className={`badge badge-${ESTADO_LABEL[estado as CertCase['estado']]?.cls ?? 'draft'}`}
+                      className={`badge ${ESTADO_LABEL[estado as CertCase['estado']]?.cls ?? 'draft'}`}
                     >
                       {ESTADO_LABEL[estado as CertCase['estado']]?.label ?? estado}: {n}
                     </span>
@@ -493,7 +493,7 @@ export function CertificacionModal({ company, onClose }: Props) {
                             {isRFCE ? 'RFCE' : 'Normal'}
                           </td>
                           <td>
-                            <span className={`badge badge-${statusInfo.cls}`}>
+                            <span className={`badge ${statusInfo.cls}`}>
                               {statusInfo.label}
                             </span>
                             {c.error_msg && (

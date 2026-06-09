@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Icon } from '@/components/Icons';
 import type { Company } from '@/types';
+import { AprobacionModal } from '@/components/modals/AprobacionModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -292,6 +293,8 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   });
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState('');
+  const [showAprobacion, setShowAprobacion] = useState(false);
   const [testFirmaResult, setTestFirmaResult] = useState<TestFirmaResult | null>(null);
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
 
@@ -324,23 +327,26 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   // ── Mark / unmark a step ──
   const markStep = async (paso: number, action: 'complete' | 'undo') => {
     setMarking(true);
+    setMarkError('');
     try {
       const res = await fetch('/api/certification/progress', {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ step: paso, action }),
       });
+      const json = await res.json().catch(() => ({}));
       if (res.ok) {
-        const json = await res.json();
-        const data = json.data ?? json;
+        const data = (json as { data?: { status: string; completedSteps: number[] } }).data ?? json;
         setProgress((prev) => ({
           ...prev,
-          status: data.status,
-          completedSteps: data.completedSteps,
+          status: (data as { status: ProgressData['status'] }).status,
+          completedSteps: (data as { completedSteps: number[] }).completedSteps,
         }));
+      } else {
+        setMarkError((json as { error?: string }).error ?? `Error ${res.status} al guardar el progreso`);
       }
-    } catch {
-      // non-fatal
+    } catch (err) {
+      setMarkError(err instanceof Error ? err.message : 'Error de red al guardar el progreso');
     } finally {
       setMarking(false);
     }
@@ -449,22 +455,28 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII proporciona un <strong>segundo set de pruebas Excel</strong> exclusivo para aprobaciones comerciales. Cada fila corresponde a un e-CF recibido al que debes emitir una respuesta de aprobación o rechazo hacia el ambiente <strong>certecf</strong>.
+              La DGII proporciona un <strong>segundo set de pruebas Excel</strong> exclusivo para aprobaciones comerciales. Descarga el Excel desde el portal DGII certecf, impórtalo aquí y envía cada respuesta firmada con el certificado del emisor.
             </p>
             <AlertBox type="info">
-              <strong>Acción requerida:</strong> Este paso es activo — descarga el Excel de aprobaciones desde el portal DGII certecf y envía cada respuesta usando el endpoint de aprobación comercial del sistema. No es automático.
+              <strong>Acción requerida:</strong> El sistema construye y firma cada XML de aprobación/rechazo automáticamente. Solo necesitas importar el Excel y confirmar la respuesta por fila.
             </AlertBox>
-            <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.5rem', color: 'var(--text)' }}>
-              URL de Aprobación Comercial
-            </h4>
-            <URLCard label="Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
-            <InstructionList items={[
-              'Inicia sesión en el portal DGII certecf y descarga el Excel del set de pruebas de aprobaciones',
-              'Por cada fila del Excel, genera y envía un XML de aprobación o rechazo comercial al certecf',
-              'Usa el endpoint POST /api/v1/dgii/aprobacion del sistema para construir y firmar cada respuesta',
-              'Si cualquier envío falla, la DGII puede reiniciar la secuencia — verifica el estado en el portal antes de continuar',
-              'Todos los casos deben quedar en estado "aceptada" antes de marcar este paso como completado',
-            ]} />
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowAprobacion(true)}
+              disabled={blocked}
+              style={{
+                fontSize: '0.875rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+              }}
+            >
+              <Icon name="checkcircle" size={16} />
+              Gestionar Aprobaciones
+            </button>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
+              Importa el Excel de aprobaciones de la DGII, ajusta Aprobar/Rechazar por cada fila y envía al certecf. Marca este paso cuando todos los casos estén aceptados.
+            </p>
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -793,7 +805,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>
                   {step.titulo}
                 </h3>
-                <span className={`badge badge-${TIPO_BADGE[step.tipo]}`} style={{ fontSize: '0.7rem' }}>
+                <span className={`badge ${TIPO_BADGE[step.tipo]}`} style={{ fontSize: '0.7rem' }}>
                   {TIPO_LABEL[step.tipo]}
                 </span>
               </div>
@@ -808,6 +820,13 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         {blocked && (
           <AlertBox type="warning">
             Este paso requiere completar el <strong>Paso {selectedPaso - 1}</strong> primero.
+          </AlertBox>
+        )}
+
+        {/* Mark error */}
+        {markError && !blocked && (
+          <AlertBox type="error">
+            {markError}
           </AlertBox>
         )}
 
@@ -857,7 +876,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
               {completedCount} de {totalSteps} pasos completados
             </p>
           </div>
-          <span className={`badge badge-${statusInfo.cls}`} style={{ fontSize: '0.8rem' }}>
+          <span className={`badge ${statusInfo.cls}`} style={{ fontSize: '0.8rem' }}>
             {statusInfo.label}
           </span>
         </div>
@@ -879,6 +898,14 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         </div>
       </div>
 
+      {/* Approval modal for Paso 3 */}
+      {showAprobacion && (
+        <AprobacionModal
+          company={company}
+          onClose={() => setShowAprobacion(false)}
+        />
+      )}
+
       {/* Two-column layout */}
       <div style={{
         display: 'grid',
@@ -898,7 +925,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
             return (
               <button
                 key={step.paso}
-                onClick={() => setSelectedPaso(step.paso)}
+                onClick={() => { setSelectedPaso(step.paso); setMarkError(''); }}
                 style={{
                   width: '100%',
                   display: 'flex',
