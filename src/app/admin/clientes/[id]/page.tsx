@@ -16,6 +16,7 @@ import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
 import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
 import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
 import { GestionarCertificadoModal } from '@/components/modals/GestionarCertificadoModal';
+import { CertificacionModal } from '@/components/modals/CertificacionModal';
 import type { Company, Factura, Secuencia, Recepcion } from '@/types';
 
 export default function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,6 +37,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [showCrearSeq, setShowCrearSeq] = useState(false);
   const [suspendiendo, setSuspendiendo] = useState(false);
   const [showGestionarCert, setShowGestionarCert] = useState(false);
+  const [showCertificacion, setShowCertificacion] = useState(false);
   const [confirmRegenKey, setConfirmRegenKey] = useState(false);
   const [syncingSeq, setSyncingSeq] = useState(false);
   const [deletingEcfId, setDeletingEcfId] = useState<string | null>(null);
@@ -216,6 +218,9 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           </button>
           <button className="btn" onClick={() => setShowCambiarAmbiente(true)}>
             <Icon name="globe" />Cambiar Ambiente
+          </button>
+          <button className="btn" onClick={() => setShowCertificacion(true)}>
+            <Icon name="shield" />Set de Pruebas
           </button>
           <button
             className={`btn ${company.estado === 'Activo' ? 'danger' : 'primary'}`}
@@ -611,6 +616,13 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             setShowGestionarCert(false);
             toast('Certificado actualizado');
           }}
+        />
+      )}
+
+      {showCertificacion && (
+        <CertificacionModal
+          company={company}
+          onClose={() => setShowCertificacion(false)}
         />
       )}
 
