@@ -28,7 +28,7 @@ interface StepConfig {
 const CERT_STEPS: StepConfig[] = [
   { paso: 1,  titulo: 'Solicitud de certificación',         descripcion: 'Completar el formulario FI-GDF-016 en el portal DGII',                         tipo: 'manual'    },
   { paso: 2,  titulo: 'Set de pruebas DGII',                descripcion: 'Enviar los 25 comprobantes pre-asignados al ambiente certecf',                  tipo: 'automatic' },
-  { paso: 3,  titulo: 'Pruebas de aprobación comercial',    descripcion: 'Verificar que el receptor procesa aprobaciones y rechazos',                     tipo: 'hybrid'    },
+  { paso: 3,  titulo: 'Pruebas de aprobación comercial',    descripcion: 'Descargar el set Excel de aprobaciones certecf y enviar XMLs de aprobación/rechazo', tipo: 'hybrid' },
   { paso: 4,  titulo: 'Pruebas de simulación',              descripcion: 'Emitir comprobantes con datos reales del emisor en certecf',                    tipo: 'automatic' },
   { paso: 5,  titulo: 'Representación impresa — Tipo 31',   descripcion: 'Subir la representación impresa del Crédito Fiscal al portal DGII',             tipo: 'hybrid'    },
   { paso: 6,  titulo: 'Representaciones impresas restantes',descripcion: 'Subir representaciones de todos los tipos de comprobante usados',               tipo: 'hybrid'    },
@@ -449,20 +449,23 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII verifica que el sistema puede recibir y procesar <strong>aprobaciones y rechazos comerciales</strong>. Nuestro receptor maneja esto automáticamente.
+              La DGII proporciona un <strong>segundo set de pruebas Excel</strong> exclusivo para aprobaciones comerciales. Cada fila corresponde a un e-CF recibido al que debes emitir una respuesta de aprobación o rechazo hacia el ambiente <strong>certecf</strong>.
             </p>
-            <AlertBox type="success">
-              <strong>Automático:</strong> El servicio receptor en ecf.villarja.com procesa aprobaciones y rechazos comerciales en tiempo real. Este paso se cumple automáticamente al completar el Paso 2.
+            <AlertBox type="info">
+              <strong>Acción requerida:</strong> Este paso es activo — descarga el Excel de aprobaciones desde el portal DGII certecf y envía cada respuesta usando el endpoint de aprobación comercial del sistema. No es automático.
             </AlertBox>
             <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.5rem', color: 'var(--text)' }}>
-              URL de Aprobación Comercial activa
+              URL de Aprobación Comercial
             </h4>
             <URLCard label="Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
             <InstructionList items={[
-              'Verifica en la pestaña "Recepciones" que se han recibido respuestas de la DGII en certecf',
-              'Las entradas de tipo "aprobacion" confirman que el canal de aprobaciones está activo',
-              'Si no hay recepciones en 24 h, confirma que la URL del Paso 7 esté registrada en el portal DGII',
+              'Inicia sesión en el portal DGII certecf y descarga el Excel del set de pruebas de aprobaciones',
+              'Por cada fila del Excel, genera y envía un XML de aprobación o rechazo comercial al certecf',
+              'Usa el endpoint POST /api/v1/dgii/aprobacion del sistema para construir y firmar cada respuesta',
+              'Si cualquier envío falla, la DGII puede reiniciar la secuencia — verifica el estado en el portal antes de continuar',
+              'Todos los casos deben quedar en estado "aceptada" antes de marcar este paso como completado',
             ]} />
+            <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
