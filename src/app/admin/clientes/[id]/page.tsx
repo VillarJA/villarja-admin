@@ -10,12 +10,12 @@ import { PLAN_LIMITS, ECF_TYPES, fmtNum, fmtDOP, fmtDateTime } from '@/lib/data'
 import {
   getClienteById, getFacturasForCliente, refreshSecuenciasUsadas, getRecepcionesForCliente,
   regenerateApiKey, updateCompanyEstado,
-  uploadCertificate, updateCertPassword,
   syncSecuenciasUsadas,
 } from '@/lib/data-layer';
 import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
 import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
 import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
+import { GestionarCertificadoModal } from '@/components/modals/GestionarCertificadoModal';
 import type { Company, Factura, Secuencia, Recepcion } from '@/types';
 
 export default function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,10 +35,8 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [showCambiarAmbiente, setShowCambiarAmbiente] = useState(false);
   const [showCrearSeq, setShowCrearSeq] = useState(false);
   const [suspendiendo, setSuspendiendo] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const [certPassword, setCertPassword] = useState('');
-  const [showCertPassword, setShowCertPassword] = useState(false);
-  const [savingPassword, setSavingPassword] = useState(false);
+  const [showGestionarCert, setShowGestionarCert] = useState(false);
+  const [confirmRegenKey, setConfirmRegenKey] = useState(false);
   const [syncingSeq, setSyncingSeq] = useState(false);
   const [toastNode, toast] = useToast();
 
@@ -59,15 +57,14 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       setSecuencias(se);
       setRecepciones(re);
       setCurrentApiKey(co.apiKey);
-      if (co.certPassword) setCertPassword(co.certPassword);
       setLoading(false);
     });
   }, [id]);
 
   const handleRegenerateKey = async () => {
     if (!company) return;
-    if (!confirm('¿Regenerar el API Key? La llave anterior quedará inválida de inmediato.')) return;
     setRegenerating(true);
+    setConfirmRegenKey(false);
     try {
       const newKey = await regenerateApiKey(company.id, company.razon, company.amb);
       setCurrentApiKey(newKey);
@@ -99,49 +96,6 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo actualizar'));
     } finally {
       setSuspendiendo(false);
-    }
-  };
-
-  const handleCertUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !company) return;
-    setUploadError('');
-    let certMeta: { subject: string; vence: string } | undefined;
-    if (certPassword.trim()) {
-      try {
-        const fd = new FormData();
-        fd.append('cert', file);
-        fd.append('password', certPassword);
-        const res = await fetch('/api/parse-cert', { method: 'POST', body: fd });
-        const json = await res.json();
-        if (res.ok) certMeta = { subject: json.subject ?? '', vence: json.vence ?? '' };
-      } catch { /* parsing failed — upload without metadata */ }
-    }
-    try {
-      await uploadCertificate(company.id, file, company.razon, certMeta);
-      toast('Certificado subido exitosamente');
-      setCompany((c) => c ? {
-        ...c,
-        cert: 'Vigente',
-        certSubject: certMeta?.subject || c.certSubject,
-        certVence: certMeta?.vence || c.certVence,
-      } : c);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Error al subir el certificado');
-    }
-    e.target.value = '';
-  };
-
-  const handleSavePassword = async () => {
-    if (!company || !certPassword.trim()) return;
-    setSavingPassword(true);
-    try {
-      await updateCertPassword(company.id, certPassword, company.razon);
-      toast('Contraseña del certificado guardada');
-    } catch (err) {
-      toast('Error: ' + (err instanceof Error ? err.message : 'No se pudo guardar'));
-    } finally {
-      setSavingPassword(false);
     }
   };
 
@@ -255,14 +209,36 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             }}>
               <Icon name="copy" />
             </button>
-            <button className="kbtn" title="Regenerar" onClick={handleRegenerateKey} disabled={regenerating}>
+            <button
+              className="kbtn"
+              title="Regenerar"
+              onClick={() => setConfirmRegenKey(true)}
+              disabled={regenerating || confirmRegenKey}
+            >
               <Icon name="refresh" style={{ opacity: regenerating ? 0.5 : 1 }} />
             </button>
           </div>
-          <div className="note info" style={{ marginTop: 12 }}>
-            <Icon name="shield" />
-            <div>Regenerar la llave invalida la anterior de inmediato. Notifica al cliente antes de hacerlo.</div>
-          </div>
+          {confirmRegenKey ? (
+            <div className="note warn" style={{ marginTop: 12 }}>
+              <Icon name="warning" />
+              <div style={{ flex: 1 }}>
+                <b>La llave anterior quedará inválida de inmediato.</b>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button className="btn sm danger" onClick={handleRegenerateKey} disabled={regenerating}>
+                    {regenerating ? 'Regenerando…' : 'Confirmar'}
+                  </button>
+                  <button className="btn sm" onClick={() => setConfirmRegenKey(false)} disabled={regenerating}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="note info" style={{ marginTop: 12 }}>
+              <Icon name="shield" />
+              <div>Regenerar invalida la llave anterior. Notifica al cliente antes de hacerlo.</div>
+            </div>
+          )}
         </div>
 
         {/* Certificado */}
@@ -271,73 +247,34 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             <Icon name="cert" style={{ width: 17, height: 17, color: 'var(--brand)' }} />
             <b style={{ fontSize: 13.5 }}>Certificado .p12</b>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span className="muted" style={{ fontSize: 12.5 }}>Estado</span>
-            <Badge cls={certCls}>{company.cert}</Badge>
-          </div>
-          {company.certSubject && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="muted" style={{ fontSize: 12.5 }}>Estado</span>
+              <Badge cls={certCls}>{company.cert}</Badge>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span className="muted" style={{ fontSize: 12.5 }}>Titular</span>
-              <span className="strong" style={{ fontSize: 12.5, textAlign: 'right', maxWidth: 160 }}>{company.certSubject}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <span className="muted" style={{ fontSize: 12.5 }}>Vencimiento</span>
-            <span className="strong mono">{company.certVence}</span>
-          </div>
-          <label className="btn sm" style={{ width: '100%', textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Icon name="file" />
-            {company.cert === 'Pendiente' ? 'Subir certificado' : 'Renovar'}
-            <input type="file" accept=".p12,.pfx" style={{ display: 'none' }} onChange={handleCertUpload} />
-          </label>
-          {uploadError && (
-            <div className="note" style={{ marginTop: 10, background: 'var(--err-bg)', borderColor: 'var(--err-bd)', color: 'var(--err)', fontSize: 11.5 }}>
-              <Icon name="warning" style={{ width: 14, height: 14 }} /><span>{uploadError}</span>
-            </div>
-          )}
-          <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-            <span className="muted" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-              Contraseña del .p12
-            </span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <input
-                  type={showCertPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={certPassword}
-                  onChange={(e) => setCertPassword(e.target.value)}
-                  style={{
-                    width: '100%', fontSize: 13, padding: '5px 30px 5px 8px',
-                    border: '1px solid var(--border)', borderRadius: 6,
-                    background: 'var(--surface)', color: 'var(--text)',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCertPassword((v) => !v)}
-                  style={{
-                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                    color: 'var(--muted)', display: 'flex', alignItems: 'center',
-                  }}
-                  title={showCertPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  <Icon name={showCertPassword ? 'eyeoff' : 'eye'} style={{ width: 15, height: 15 }} />
-                </button>
-              </div>
-              <button
-                className="btn sm"
-                onClick={handleSavePassword}
-                disabled={savingPassword || !certPassword.trim()}
+              <span
+                className="strong"
+                style={{ fontSize: 12.5, textAlign: 'right', maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={company.certSubject}
               >
-                {savingPassword ? '…' : 'Guardar'}
-              </button>
+                {company.certSubject || '—'}
+              </span>
             </div>
-            <span className="muted" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
-              Requerida por el API para firmar e-CF
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="muted" style={{ fontSize: 12.5 }}>Vencimiento</span>
+              <span className="strong mono">{company.certVence || '—'}</span>
+            </div>
           </div>
+          <button
+            className={`btn sm${company.cert === 'Pendiente' ? ' primary' : ''}`}
+            style={{ width: '100%', justifyContent: 'center' }}
+            onClick={() => setShowGestionarCert(true)}
+          >
+            <Icon name={company.cert === 'Pendiente' ? 'file' : 'cert'} />
+            {company.cert === 'Pendiente' ? 'Subir certificado' : 'Gestionar certificado'}
+          </button>
         </div>
 
         {/* Plan */}
@@ -588,6 +525,18 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             setShowCrearSeq(false);
             toast('Secuencia creada. Recargando…');
             refreshSecuenciasUsadas(id).then(setSecuencias);
+          }}
+        />
+      )}
+
+      {showGestionarCert && (
+        <GestionarCertificadoModal
+          company={company}
+          onClose={() => setShowGestionarCert(false)}
+          onUpdated={(partial) => {
+            setCompany((c) => c ? { ...c, ...partial } : c);
+            setShowGestionarCert(false);
+            toast('Certificado actualizado');
           }}
         />
       )}
