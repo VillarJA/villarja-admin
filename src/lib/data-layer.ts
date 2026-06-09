@@ -82,6 +82,9 @@ function mapCompany(row: Record<string, unknown>, idx: number): Company {
     apiKey: String(row.api_key || row.apiKey || ''),
     ingresoMes: PLAN_LIMITS[plan]?.precio ?? 0,
     mark: idx % COMARK.length,
+    certStatus: (['en_proceso', 'certificada'].includes(String(row.certification_status))
+      ? String(row.certification_status)
+      : 'no_iniciada') as import('@/types').CertStatus,
   };
 }
 

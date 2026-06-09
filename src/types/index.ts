@@ -1,3 +1,5 @@
+export type CertStatus = 'no_iniciada' | 'en_proceso' | 'certificada';
+
 export interface Company {
   id: string;
   rnc: string;
@@ -15,6 +17,7 @@ export interface Company {
   apiKey: string;
   ingresoMes: number;
   mark: number;
+  certStatus: CertStatus;
 }
 
 export interface Factura {

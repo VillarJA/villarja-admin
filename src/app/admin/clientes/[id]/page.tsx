@@ -209,6 +209,11 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                   {company.estado}
                 </Badge>
                 <span className="tag-type">Ambiente: {company.amb}</span>
+                {company.certStatus !== 'no_iniciada' && (
+                  <Badge cls={company.certStatus === 'certificada' ? 'ok' : 'info'}>
+                    {company.certStatus === 'certificada' ? 'Certificada' : 'Certificación en proceso'}
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -363,7 +368,6 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             )}
           </button>
           <button className={tab === 'certificacion' ? 'on' : ''} onClick={() => setTab('certificacion')}>
-            <Icon name="shield" style={{ width: 13, height: 13, marginRight: 5 }} />
             Certificación
           </button>
         </div>
