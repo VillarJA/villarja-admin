@@ -209,7 +209,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                   {company.estado}
                 </Badge>
                 <span className="tag-type">Ambiente: {company.amb}</span>
-                {company.certStatus !== 'no_iniciada' && (
+                {(company.certStatus && company.certStatus !== 'no_iniciada') && (
                   <Badge cls={company.certStatus === 'certificada' ? 'ok' : 'info'}>
                     {company.certStatus === 'certificada' ? 'Certificada' : 'Certificación en proceso'}
                   </Badge>

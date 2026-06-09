@@ -17,7 +17,7 @@ export interface Company {
   apiKey: string;
   ingresoMes: number;
   mark: number;
-  certStatus: CertStatus;
+  certStatus?: CertStatus;
 }
 
 export interface Factura {
