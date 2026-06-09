@@ -8,7 +8,7 @@ import { CoMark } from '@/components/ui/CoMark';
 import { useToast } from '@/components/ui/Toast';
 import { PLAN_LIMITS, ECF_TYPES, fmtNum, fmtDOP, fmtDateTime } from '@/lib/data';
 import {
-  getClienteById, getFacturasForCliente, getSecuencias,
+  getClienteById, getFacturasForCliente, getSecuencias, getRecepcionesForCliente,
   regenerateApiKey, updateCompanyEstado,
   uploadCertificate, updateCertPassword,
   syncSecuenciasUsadas,
@@ -16,7 +16,7 @@ import {
 import { CambiarPlanModal } from '@/components/modals/CambiarPlanModal';
 import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
 import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
-import type { Company, Factura, Secuencia } from '@/types';
+import type { Company, Factura, Secuencia, Recepcion } from '@/types';
 
 export default function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -26,7 +26,8 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [secuencias, setSecuencias] = useState<Secuencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [tab, setTab] = useState<'secuencias' | 'facturas'>('secuencias');
+  const [tab, setTab] = useState<'secuencias' | 'facturas' | 'recepciones'>('secuencias');
+  const [recepciones, setRecepciones] = useState<Recepcion[]>([]);
   const [showKey, setShowKey] = useState(false);
   const [currentApiKey, setCurrentApiKey] = useState('');
   const [regenerating, setRegenerating] = useState(false);
@@ -46,7 +47,8 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       getClienteById(id),
       getFacturasForCliente(id),
       getSecuencias(id),
-    ]).then(([co, fa, se]) => {
+      getRecepcionesForCliente(id),
+    ]).then(([co, fa, se, re]) => {
       if (!co) {
         setNotFound(true);
         setLoading(false);
@@ -55,6 +57,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
       setCompany(co);
       setFacturas(fa);
       setSecuencias(se);
+      setRecepciones(re);
       setCurrentApiKey(co.apiKey);
       if (co.certPassword) setCertPassword(co.certPassword);
       setLoading(false);
@@ -367,6 +370,18 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           <button className={tab === 'facturas' ? 'on' : ''} onClick={() => setTab('facturas')}>
             Últimas facturas
           </button>
+          <button className={tab === 'recepciones' ? 'on' : ''} onClick={() => setTab('recepciones')}>
+            Recepciones
+            {recepciones.filter((r) => !r.procesado).length > 0 && (
+              <span style={{
+                marginLeft: 6, fontSize: 11, fontWeight: 700,
+                background: 'var(--brand)', color: '#fff',
+                borderRadius: 10, padding: '1px 6px',
+              }}>
+                {recepciones.filter((r) => !r.procesado).length}
+              </span>
+            )}
+          </button>
         </div>
 
         {tab === 'secuencias' && (
@@ -473,6 +488,69 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
               </table>
             </div>
           )
+        )}
+
+        {tab === 'recepciones' && (
+          <div>
+            <div className="toolbar" style={{ justifyContent: 'space-between' }}>
+              <span className="muted" style={{ fontSize: 12.5 }}>
+                Protocolo Emisor-Receptor DGII — e-CF recibidos por este cliente
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <span className="tag-type">
+                  {recepciones.filter((r) => !r.procesado).length} pendientes de acuse
+                </span>
+              </div>
+            </div>
+            {recepciones.length === 0 ? (
+              <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12.5 }}>
+                No hay e-CF recibidos registrados para este cliente
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th>e-NCF</th>
+                      <th>Tipo</th>
+                      <th>RNC Emisor</th>
+                      <th>RNC Comprador</th>
+                      <th>Fecha</th>
+                      <th>Acuse</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recepciones.map((r) => (
+                      <tr key={r.id}>
+                        <td className="mono">{r.encf}</td>
+                        <td>
+                          <span className="tag-type" style={{
+                            background: r.tipo === 'aprobacion' ? 'var(--ok-bg)' : undefined,
+                            color: r.tipo === 'aprobacion' ? 'var(--ok)' : undefined,
+                          }}>
+                            {r.tipo === 'aprobacion' ? 'Aprobación' : 'e-CF'}
+                          </span>
+                          {r.tipoEcf && (
+                            <span className="muted" style={{ marginLeft: 6, fontSize: 11.5 }}>
+                              {r.tipoEcf} · {ECF_TYPES[r.tipoEcf] ?? ''}
+                            </span>
+                          )}
+                        </td>
+                        <td className="mono muted">{r.rncEmisor}</td>
+                        <td className="mono muted">{r.rncComprador}</td>
+                        <td className="muted">{fmtDateTime(r.fecha)}</td>
+                        <td>
+                          <Badge cls={r.procesado ? 'ok' : 'warn'}>
+                            {r.procesado ? 'Enviado' : 'Pendiente'}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

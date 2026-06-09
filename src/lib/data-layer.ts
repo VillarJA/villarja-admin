@@ -245,6 +245,36 @@ export async function getRecepciones(): Promise<Recepcion[]> {
   }
 }
 
+export async function getRecepcionesForCliente(companyId: string): Promise<Recepcion[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('received_ecf_documents')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error || !data?.length) return [];
+    return data.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        id:           String(r['id']            ?? ''),
+        companyId:    String(r['company_id']    ?? ''),
+        razonSocial:  String(r['rnc_emisor']    ?? '—'),
+        rncEmisor:    String(r['rnc_emisor']    ?? '—'),
+        rncComprador: String(r['rnc_comprador'] ?? '—'),
+        encf:         String(r['encf']          ?? '—'),
+        tipoEcf:      r['tipo_ecf'] != null ? Number(r['tipo_ecf']) : null,
+        tipo:         (r['tipo'] === 'aprobacion' ? 'aprobacion' : 'ecf') as 'ecf' | 'aprobacion',
+        procesado:    Boolean(r['procesado']),
+        fecha:        new Date(String(r['created_at'])),
+      } satisfies Recepcion;
+    });
+  } catch {
+    return [];
+  }
+}
+
 // ─── READ: Chart data ─────────────────────────────────────────────────────────
 
 export async function getChartData30d(): Promise<number[]> {
@@ -723,9 +753,10 @@ export async function createDefaultSequencias(
   // certeCF: DGII allows up to 10,000,000 per type; testeCF: small range for local testing
   const hasta = norm === 'testecf' ? 9999 : 10000000;
 
-  const exp = new Date();
-  norm === 'testecf' ? exp.setMonth(exp.getMonth() + 6) : exp.setFullYear(exp.getFullYear() + 1);
-  const vence = `${String(exp.getDate()).padStart(2, '0')}-${String(exp.getMonth() + 1).padStart(2, '0')}-${exp.getFullYear()}`;
+  // DGII Norma 06-18: sequences expire on Dec 31 of the year following authorization.
+  // testeCF uses current year end (short-lived test range).
+  const yr = new Date().getFullYear();
+  const vence = norm === 'testecf' ? `${yr}-12-31` : `${yr + 1}-12-31`;
 
   const inserts = DEFAULT_SEQUENCE_TYPES.map((tipo) => ({
     company_id: companyId,
@@ -770,22 +801,28 @@ export async function syncSecuenciasUsadas(
     counts[tipo] = (counts[tipo] || 0) + 1;
   }
 
-  // Update each sequence row with the real document count
+  // Update each sequence row with the real document count.
+  // Select ambiente too so we can target the exact row (a company may have
+  // separate rows for certecf vs testecf for the same tipo_ecf).
   const { data: seqs, error: seqsErr } = await supabase
     .from('sequences')
-    .select('tipo_ecf')
+    .select('tipo_ecf, ambiente')
     .eq('company_id', companyId);
 
   if (seqsErr) throw new Error(seqsErr.message);
 
   for (const seq of (seqs ?? [])) {
-    const tipo = Number((seq as Record<string, unknown>).tipo_ecf);
+    const s = seq as Record<string, unknown>;
+    const tipo = Number(s.tipo_ecf);
+    const amb = String(s.ambiente ?? '');
     const usadas = counts[tipo] ?? 0;
-    await supabase
+    const { error: updErr } = await supabase
       .from('sequences')
       .update({ usadas })
       .eq('company_id', companyId)
-      .eq('tipo_ecf', tipo);
+      .eq('tipo_ecf', tipo)
+      .eq('ambiente', amb);
+    if (updErr) throw new Error(`[tipo ${tipo} / ${amb}] ${updErr.message}`);
   }
 
   await insertAuditLog('Sincronizó contadores de secuencias e-NCF desde ecf_documents', razon);
