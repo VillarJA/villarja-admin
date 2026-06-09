@@ -8,7 +8,7 @@ import { CoMark } from '@/components/ui/CoMark';
 import { useToast } from '@/components/ui/Toast';
 import { PLAN_LIMITS, ECF_TYPES, fmtNum, fmtDOP, fmtDateTime } from '@/lib/data';
 import {
-  getClienteById, getFacturasForCliente, getSecuencias, getRecepcionesForCliente,
+  getClienteById, getFacturasForCliente, refreshSecuenciasUsadas, getRecepcionesForCliente,
   regenerateApiKey, updateCompanyEstado,
   uploadCertificate, updateCertPassword,
   syncSecuenciasUsadas,
@@ -46,7 +46,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     Promise.all([
       getClienteById(id),
       getFacturasForCliente(id),
-      getSecuencias(id),
+      refreshSecuenciasUsadas(id),
       getRecepcionesForCliente(id),
     ]).then(([co, fa, se, re]) => {
       if (!co) {
@@ -587,7 +587,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           onCreated={() => {
             setShowCrearSeq(false);
             toast('Secuencia creada. Recargando…');
-            getSecuencias(id).then(setSecuencias);
+            refreshSecuenciasUsadas(id).then(setSecuencias);
           }}
         />
       )}

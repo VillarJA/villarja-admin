@@ -776,18 +776,10 @@ export async function createDefaultSequencias(
 
 // ─── SYNC SEQUENCES ───────────────────────────────────────────────────────────
 
-export async function syncSecuenciasUsadas(
-  companyId: string,
-  razon: string,
-): Promise<Secuencia[]> {
-  if (!supabase) throw new Error('Supabase no configurado');
-
-  // Count all transmitted documents per tipo_ecf.
-  // DGII rule: any e-CF sent to DGII consumes a sequence, including rejected ones.
-  // Exception: 'draft' state = never transmitted → sequence not consumed.
-  // Note: some rejection reasons (cert error, delegation) allow reuse of the same e-NCF,
-  // but distinguishing these requires a rejection_reason field not tracked here.
-  const { data: docs, error: docsErr } = await supabase
+// Counts transmitted documents (non-draft) per tipo_ecf and persists to sequences.
+// Draft invoices are excluded: they haven't been sent to DGII yet.
+async function computeAndPersistSecuenciasCounts(companyId: string): Promise<void> {
+  const { data: docs, error: docsErr } = await supabase!
     .from('ecf_documents')
     .select('tipo_ecf')
     .eq('company_id', companyId)
@@ -801,10 +793,7 @@ export async function syncSecuenciasUsadas(
     counts[tipo] = (counts[tipo] || 0) + 1;
   }
 
-  // Update each sequence row with the real document count.
-  // Select ambiente too so we can target the exact row (a company may have
-  // separate rows for certecf vs testecf for the same tipo_ecf).
-  const { data: seqs, error: seqsErr } = await supabase
+  const { data: seqs, error: seqsErr } = await supabase!
     .from('sequences')
     .select('tipo_ecf, ambiente')
     .eq('company_id', companyId);
@@ -816,7 +805,7 @@ export async function syncSecuenciasUsadas(
     const tipo = Number(s.tipo_ecf);
     const amb = String(s.ambiente ?? '');
     const usadas = counts[tipo] ?? 0;
-    const { error: updErr } = await supabase
+    const { error: updErr } = await supabase!
       .from('sequences')
       .update({ usadas })
       .eq('company_id', companyId)
@@ -824,7 +813,24 @@ export async function syncSecuenciasUsadas(
       .eq('ambiente', amb);
     if (updErr) throw new Error(`[tipo ${tipo} / ${amb}] ${updErr.message}`);
   }
+}
 
+// Silent refresh — recalculates counters on page load without writing an audit log.
+export async function refreshSecuenciasUsadas(companyId: string): Promise<Secuencia[]> {
+  if (!supabase) return getSecuencias(companyId);
+  try {
+    await computeAndPersistSecuenciasCounts(companyId);
+  } catch { /* fail silently — stale stored value is shown instead */ }
+  return getSecuencias(companyId);
+}
+
+// Manual sync triggered by the "Sincronizar Contadores" button — writes audit log.
+export async function syncSecuenciasUsadas(
+  companyId: string,
+  razon: string,
+): Promise<Secuencia[]> {
+  if (!supabase) throw new Error('Supabase no configurado');
+  await computeAndPersistSecuenciasCounts(companyId);
   await insertAuditLog('Sincronizó contadores de secuencias e-NCF desde ecf_documents', razon);
   return getSecuencias(companyId);
 }
