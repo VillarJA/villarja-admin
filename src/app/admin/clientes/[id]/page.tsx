@@ -144,11 +144,9 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const maskedKey = currentApiKey.slice(0, 12) + '••••••••••••••••';
   const certCls = company.cert === 'Vigente' ? 'ok' : company.cert === 'Por vencer' ? 'warn' : company.cert === 'Vencido' ? 'err' : 'draft';
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
-
   async function downloadEcfFile(ecfId: string, type: 'xml' | 'pdf', encf: string) {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/ecf/${ecfId}/${type}`, {
+      const res = await fetch(`/api/ecf/${ecfId}/${type}`, {
         headers: { 'X-API-Key': currentApiKey },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -168,7 +166,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
     if (!confirm('¿Eliminar este borrador? Esta acción no se puede deshacer.')) return;
     setDeletingEcfId(ecfId);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/ecf/${ecfId}`, {
+      const res = await fetch(`/api/ecf/${ecfId}`, {
         method: 'DELETE',
         headers: { 'X-API-Key': currentApiKey },
       });
