@@ -17,6 +17,7 @@ import { CambiarAmbienteModal } from '@/components/modals/CambiarAmbienteModal';
 import { CrearSecuenciaModal } from '@/components/modals/CrearSecuenciaModal';
 import { GestionarCertificadoModal } from '@/components/modals/GestionarCertificadoModal';
 import { CertificacionModal } from '@/components/modals/CertificacionModal';
+import { CertificacionTab } from '@/components/tabs/CertificacionTab';
 import type { Company, Factura, Secuencia, Recepcion } from '@/types';
 
 export default function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +28,7 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
   const [secuencias, setSecuencias] = useState<Secuencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [tab, setTab] = useState<'secuencias' | 'facturas' | 'recepciones'>('secuencias');
+  const [tab, setTab] = useState<'secuencias' | 'facturas' | 'recepciones' | 'certificacion'>('secuencias');
   const [recepciones, setRecepciones] = useState<Recepcion[]>([]);
   const [showKey, setShowKey] = useState(false);
   const [currentApiKey, setCurrentApiKey] = useState('');
@@ -219,9 +220,6 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
           <button className="btn" onClick={() => setShowCambiarAmbiente(true)}>
             <Icon name="globe" />Cambiar Ambiente
           </button>
-          <button className="btn" onClick={() => setShowCertificacion(true)}>
-            <Icon name="shield" />Set de Pruebas
-          </button>
           <button
             className={`btn ${company.estado === 'Activo' ? 'danger' : 'primary'}`}
             onClick={handleSuspender}
@@ -363,6 +361,10 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                 {recepciones.filter((r) => !r.procesado).length}
               </span>
             )}
+          </button>
+          <button className={tab === 'certificacion' ? 'on' : ''} onClick={() => setTab('certificacion')}>
+            <Icon name="shield" style={{ width: 13, height: 13, marginRight: 5 }} />
+            Certificación
           </button>
         </div>
 
@@ -565,6 +567,15 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {tab === 'certificacion' && (
+          <div style={{ padding: '1.25rem' }}>
+            <CertificacionTab
+              company={company}
+              onOpenTestSet={() => setShowCertificacion(true)}
+            />
           </div>
         )}
       </div>
