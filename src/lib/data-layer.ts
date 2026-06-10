@@ -151,30 +151,23 @@ function mapAuditLog(row: Record<string, unknown>): AuditLog {
 
 // ─── READ: Companies ───────────────────────────────────────────────────────────
 
+// Companies use server-side API routes (service role key) to bypass RLS.
 export async function getClientes(): Promise<Company[]> {
-  if (!supabase) throw new Error('Supabase no configurado — verifica NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  const { data, error } = await supabase
-    .from('companies')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(`[Supabase ${error.code}] ${error.message}`);
-  if (!data?.length) return [];
+  const res = await fetch('/api/admin/companies');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    throw new Error(String(body.error ?? `Error ${res.status} al cargar clientes`));
+  }
+  const data = await res.json() as unknown[];
   return data.map((row, idx) => mapCompany(row as Record<string, unknown>, idx));
 }
 
 export async function getClienteById(id: string): Promise<Company | null> {
-  if (!supabase) return null;
-  try {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (error || !data) return null;
-    return mapCompany(data as Record<string, unknown>, 0);
-  } catch {
-    return null;
-  }
+  const res = await fetch(`/api/admin/companies/${id}`);
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  const data = await res.json() as Record<string, unknown>;
+  return mapCompany(data, 0);
 }
 
 // ─── READ: Facturas ────────────────────────────────────────────────────────────
