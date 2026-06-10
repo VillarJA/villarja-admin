@@ -24,12 +24,19 @@ export default function ClientesPage() {
   const [showNuevo, setShowNuevo] = useState(false);
   const [createdCompany, setCreatedCompany] = useState<Company | null>(null);
   const [createdKey, setCreatedKey] = useState('');
+  const [fetchError, setFetchError] = useState('');
   const [toastNode, toast] = useToast();
   const pageSize = 8;
 
-  useEffect(() => {
-    getClientes().then((data) => { setClientes(data); setLoading(false); });
-  }, []);
+  const loadClientes = () => {
+    setLoading(true);
+    setFetchError('');
+    getClientes()
+      .then((data) => { setClientes(data); setLoading(false); })
+      .catch((err) => { setFetchError(err instanceof Error ? err.message : 'Error al cargar clientes'); setLoading(false); });
+  };
+
+  useEffect(() => { loadClientes(); }, []);
 
   const filtered = useMemo(() => {
     return clientes.filter((c) => {
@@ -84,6 +91,21 @@ export default function ClientesPage() {
     );
   }
 
+  if (fetchError) {
+    return (
+      <div className="content-wrap fade-in">
+        <div className="note" style={{ background: 'var(--err-bg)', borderColor: 'var(--err-bd)', color: 'var(--err)', marginBottom: 16 }}>
+          <Icon name="warning" />
+          <div>
+            <strong>Error al cargar clientes</strong>
+            <div style={{ fontSize: 12, marginTop: 4, fontFamily: 'monospace' }}>{fetchError}</div>
+          </div>
+        </div>
+        <button className="btn" onClick={loadClientes}><Icon name="refresh" />Reintentar</button>
+      </div>
+    );
+  }
+
   return (
     <div className="content-wrap fade-in">
       <div className="page-head">
@@ -92,6 +114,9 @@ export default function ClientesPage() {
           <p>{clientes.length} empresas registradas · {clientes.filter((c) => c.estado === 'Activo').length} activas</p>
         </div>
         <div className="page-head-actions">
+          <button className="btn" onClick={loadClientes}>
+            <Icon name="refresh" />Recargar
+          </button>
           <button className="btn" onClick={handleExportCSV}>
             <Icon name="download" />Exportar CSV
           </button>

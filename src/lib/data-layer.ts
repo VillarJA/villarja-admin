@@ -152,18 +152,14 @@ function mapAuditLog(row: Record<string, unknown>): AuditLog {
 // ─── READ: Companies ───────────────────────────────────────────────────────────
 
 export async function getClientes(): Promise<Company[]> {
-  if (!supabase) return [];
-  try {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) return [];
-    if (!data?.length) return [];
-    return data.map((row, idx) => mapCompany(row as Record<string, unknown>, idx));
-  } catch {
-    return [];
-  }
+  if (!supabase) throw new Error('Supabase no configurado — verifica NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const { data, error } = await supabase
+    .from('companies')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`[Supabase ${error.code}] ${error.message}`);
+  if (!data?.length) return [];
+  return data.map((row, idx) => mapCompany(row as Record<string, unknown>, idx));
 }
 
 export async function getClienteById(id: string): Promise<Company | null> {
