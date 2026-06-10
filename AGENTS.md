@@ -8,75 +8,75 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <claude-mem-context>
 # Memory Context
 
-# [villarja-admin-portal] recent context, 2026-06-03 2:29pm AST
+# [villarja-admin-portal] recent context, 2026-06-09 11:12pm AST
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (15,862t read) | 1,254,775t work | 99% savings
+Stats: 50 obs (20,071t read) | 286,846t work | 93% savings
 
-### Jun 3, 2026
-S902 Admin portal audit and fix: remove all hardcoded data, update login branding for multi-tenant scope (FluxyMed/FluxyGo), validate all buttons/pages, add animations, and write Playwright QA tests (Jun 3, 9:03 AM)
-S903 Admin portal audit and fix: remove hardcoded data, rebrand login as multi-tenant portal (FluxyMed/FluxyGo), fix all stub buttons, add animations, write Playwright QA tests — then push to GitHub (Jun 3, 9:26 AM)
-S904 Fix Vercel build failure caused by @playwright/test module not found in e2e/helpers.ts (Jun 3, 9:28 AM)
-S905 Fix Vercel build failure: exclude Playwright files from Next.js TypeScript compilation (Jun 3, 9:35 AM)
-S906 User asked whether the "superpower" skill always loads in this project when a prompt is launched (Jun 3, 9:40 AM)
-S908 Audit del módulo clientes de villarja-admin-portal: verificar almacenamiento, migraciones, formulario de nuevo cliente (API keys por ambiente), y funcionalidad de botones (Jun 3, 9:54 AM)
-S910 Run pending Supabase migrations for villarja-admin-portal and answer whether it's safe to change ambiente type on the same API key (Jun 3, 10:47 AM)
-S912 Comprehensive validation of client management system focusing on data storage, API key generation per DGII environment, and UI functionality — implemented complete per-environment API key prefix system (vja_test_, vja_cert_, vja_live_) with automatic regeneration on environment change. (Jun 3, 11:52 AM)
-9417 12:06p 🔵 DGII compliance constants: XSD schemas per tipo_ecf, buyer requirements, taxes, measurement units
-9418 " 🔵 Token lifecycle: OAuth2-style semilla→sign→validate flow with 1-hour caching and 5-min reuse threshold
-9419 " 🔵 API key validation: plain UUID lookup by exact match; environment determined by company.ambiente field, not key prefix
-9420 12:11p 🔴 Fixed security gap: API key validation now checks company activa status
-9421 " ✅ Added crypto.randomBytes import to admin controller in preparation for API key format standardization
-9422 " ✅ Extended generateApiKey to support vja_cert prefix for certeCF environment
-9423 " 🟣 Implemented environment-specific API key generation in backend admin controller
-9424 12:12p ✅ Updated createCompany() to use environment-specific API key generation
-9425 12:13p 🟣 Enhanced updateCompany() with automatic API key regeneration on ambiente change
-9426 " ✅ Updated resetApiKey() to generate environment-specific keys
-9427 " ✅ Added environment-to-prefix mapping and enhanced API key functions in frontend data layer
-9429 " ✅ Integrated CambiarAmbienteModal into client detail page
-9430 12:14p ✅ Added environment modal state to client detail page
-9431 " ✅ Updated handleRegenerateKey to pass company ambiente to regenerateApiKey
-9432 " ✅ Added "Cambiar Ambiente" button to client detail page header
-9433 12:15p ✅ Added CambiarAmbienteModal rendering and handlers to client detail page
-S914 Validate client storage, migrations, client form (API key per billing environment), and all buttons/functions in villarja-admin-portal (Jun 3, 12:18 PM)
-9446 12:24p 🔵 Bug Report: Detail Page Fails to Load
-9447 " 🟣 DGII RNC/Cedula Lookup on New Client Creation
-9448 12:25p 🔵 Client Detail Page Structure in villarja-admin-portal
-9449 " 🔵 Environment Configuration: Two Supabase Projects in villarja-admin-portal
-9450 12:26p 🔵 Build Passes Clean — Detail Page Bug is Runtime, Not Compile-Time
-9451 12:28p 🔵 PLAN_LIMITS Constant Defines Three Subscription Tiers in data.ts
-9452 12:29p 🔵 NuevoClienteModal Current Structure — Target for DGII Padron Lookup Feature
-9453 12:35p 🔴 Plan normalization and null-safety fixes in villarja-admin-portal
-9454 " 🔵 villarja-admin-portal Supabase and API configuration confirmed
-9455 " ✅ Second Supabase project added for DGII RNC/Cédula padrón lookup
-9456 " 🟣 DGII RNC padrón lookup module created at src/lib/padron.ts
-9457 12:36p 🟣 NuevoClienteModal upgraded with live DGII padrón RNC lookup and auto-fill
-9458 12:37p 🔵 Next.js build fails on Windows with EPERM file lock on .next/static
-9459 " 🔵 TypeScript type-check passes with zero errors after all changes
-9460 " ✅ Committed plan normalization bugfix and DGII padrón feature to master (eb64c36)
-9461 12:38p ✅ Pushed commit eb64c36 to GitHub remote VillarJA/villarja-admin-portal master
-9462 12:41p 🔵 Confirmed rnc_contribuyentes table schema and DGII padrón anon key
-9463 " 🔴 Fixed padron.ts mapper to match actual rnc_contribuyentes column names
-9464 " 🟣 NuevoClienteModal adds 'suspended' padrón status and actividad económica tracking
-9465 12:42p 🟣 NuevoClienteModal RNC lookup handler wired to suspended state and actividad económica
-9466 " 🟣 NuevoClienteModal displays actividad económica inline and warns on suspended DGII taxpayers
-9467 12:43p ✅ Committed corrected DGII padrón column mapping to master (b1cbfa3)
-9468 12:44p ✅ Pushed b1cbfa3 to GitHub — DGII padrón integration complete on master
-S915 Validate client storage/migrations, client form API key per billing environment, and all buttons/functions — villarja-admin-portal (Jun 3, 12:44 PM)
-9473 1:40p 🔵 Supabase companies table uses legacy schema incompatible with portal migrations
-9474 " 🔴 createCompany now auto-detects legacy schema and falls back to compatible insert payload
-9475 " 🔴 Deleted hardcoded test company "Empresa Test SRL" from Supabase production database
-9476 " ✅ data-layer getClientes/getFacturas/getSecuencias no longer fall back to mock data on Supabase errors
-9477 " ✅ mapCompany now handles legacy companies schema with alias fallback and certificate path detection
-9480 1:41p 🔵 Second npm build attempt failed with EPERM file lock on .next/static/chunks directory
-9486 1:45p 🔵 updateCompanyPlan and updateCompanyAmbiente lack legacy schema normalization — may store wrong casing
-9487 1:46p 🔵 Dev server not running; EPERM build failure caused by OneDrive sync locking .next directory
-9493 1:47p ✅ Removed all mock data fallbacks from data-layer when Supabase is unconfigured
-9495 1:48p ✅ Final verification: 3 tests passing, ESLint clean across all 7 modified source files after demo-data removal
-9497 " ✅ Production build passes exit 0 after all schema-compatibility and demo-data removal changes
+### Jun 9, 2026
+S1020 Review and fix portal: tab icons, client certification status display, XML data sources, API validation, and Fluxgo Wizard replacement (Jun 9, 1:31 PM)
+S1021 DGII certeCF certification UI: Step 3 approval test set modal + markStep error handling + badge CSS fixes, committed and pushed (Jun 9, 1:41 PM)
+S1022 Fix Vercel deploy failure caused by missing `certStatus` field in Company type (Jun 9, 1:55 PM)
+S1023 Fix "Ruta no encontrada: POST /api/v1/certification/progress" error on "Marcar como completado" button (Jun 9, 2:15 PM)
+11147 2:19p 🔵 Missing API Route: POST /api/v1/certification/progress
+11148 2:20p 🔵 Certification Progress API Committed But Not Pushed to Origin
+11149 " 🔴 Deployed Certification Progress API Fix to Production
+S1024 Fix "No autenticado" error appearing in the villarja-admin-portal when accessing certification progress endpoints (Jun 9, 2:20 PM)
+11152 10:15p 🔵 Authentication Error: "No autenticado" Appearing in UI
+11155 10:16p 🔵 villarja-ecf-api Has No TypeScript Source Files in Expected Locations
+11156 " 🔵 villarja-ecf-api Full TypeScript Project Structure Mapped
+11158 10:17p 🔵 villarja-ecf-api Express App Architecture and Route Authentication Model
+11159 " 🔵 villarja-ecf-api API Key Auth Uses PostgreSQL RLS Context Per Request
+11167 10:19p 🔵 villarja-ecf-api Full API Route Surface at /api/v1
+11169 10:20p 🔵 Root Cause Found: "No autenticado" Comes from Certification Progress Endpoints Checking Wrong Auth Context
+11170 " 🔴 Fixed "No autenticado" Bug in Certification Progress Endpoints
+11173 10:21p 🔴 Certification Progress Fix Committed to villarja-ecf-api (commit 197c4b9)
+11174 " ✅ Certification Progress Fix Pushed to GitHub — Render Auto-Deploy Triggered
+S1025 Fix "No autenticado" error on certification progress endpoints — diagnosed, fixed, committed, pushed, and DB verified (Jun 9, 10:21 PM)
+11177 10:23p 🔵 villarja-ecf-api Production Database Already Up to Date
+S1027 Fix DGII eCF certification step 2: empty XML fields causing rejections, cases stuck at "enviado", and DGII rejection log not visible in admin portal (Jun 9, 10:23 PM)
+11182 10:30p 🔵 DGII eCF Test Suite Rejection: Missing Required Fields in Step 2 Wizard
+11183 " 🔵 eCF Certification Wizard Architecture: 15-Step DGII Process in villarja-admin-portal
+11184 10:31p 🔵 CertificacionModal: Excel Parsed with '#e' Defaults; DGII Error Messages Truncated in UI
+11185 " 🔵 Root Cause: Certification Cases Show 'sent' but Never Poll DGII for Acceptance; Column Header Mismatch Likely Empties Key Fields
+11186 10:32p 🔵 dgii-client.service.ts: consultarResultado Exists but Is Never Called After sendCase
+11188 10:35p 🔵 ECF API Route Map: No Status-Poll Endpoint for Certification Cases
+11193 10:37p 🔴 certification.controller.ts: Import consultarResultado to Enable Post-Send DGII Status Polling
+11194 10:38p 🔴 Fix DGII Excel Column Header Mismatch: normalizeExcelKey Strips Accents and Whitespace
+11195 " ✅ normalizeExcelKey: Add ESLint Disable Comment for Unicode Regex
+11196 10:39p 🔴 Fix Unicode Combining Character Encoding in normalizeExcelKey Regex
+11197 " 🔴 normalizeExcelKey: Replace Literal Unicode Chars with \u0300-\u036f Escape Range
+11199 10:40p 🔵 normalizeExcelKey Regex Still Shows Literal Unicode in Read Output After Python Replacement
+11200 " 🔵 Confirmed: normalizeExcelKey Regex Uses Proper \u0300-\u036f Escape Sequences in Source File
+11201 " 🔴 importTestSet: normalizeTestCaseKeys Now Applied at Import Time Before DB Storage
+11202 " 🔴 sendCase: Inline DGII Error Field Now Triggers Immediate Rejection and Reset
+11203 10:41p 🟣 New checkCaseStatus Endpoint: POST /certification/cases/:caseId/check Polls DGII for Final Acceptance
+11204 " 🟣 Route Registered: POST /certification/cases/:caseId/check Now Live in ECF API
+11205 " 🟣 Admin Portal Proxy Route Created: /api/certification/cases/[caseId]/check
+11206 10:43p 🟣 CertificacionModal.tsx fully updated with DGII status verification and full error display
+S1028 Fix DGII eCF certification step 2: empty XML fields causing rejections, cases stuck at "enviado", DGII rejection log not visible — all fixes implemented, committed, and pushed to GitHub (Jun 9, 10:46 PM)
+S1030 After completing DGII certification fixes, investigated why a company might not appear in the clientes list — found silent error swallowing in getClientes() and improved error visibility + added manual refresh (Jun 9, 10:48 PM)
+S1031 Full session: fix DGII eCF certification rejections (empty XML fields, silent errors, no status polling) + improve clientes page error visibility (Jun 9, 11:03 PM)
+11231 11:08p 🔵 Clientes no visibles en UI tras correcciones de seguridad en Supabase
+11232 " 🔵 Supabase RLS on `companies` table blocking client visibility after security changes
+11233 11:09p 🔵 RLS policy requires `auth.role() = 'authenticated'` — anon key alone is insufficient to read `companies`
+11234 " 🔵 No service role key — entire portal relies on anon key + Supabase Auth session for RLS access
+11235 11:10p 🔵 Demo login bypasses Supabase Auth — causes silent RLS block on all `companies` queries
+11236 " 🔵 No existen rutas API admin en src/app/api/admin/
+11237 " 🟣 Creado cliente Supabase con Service Role Key para bypass de RLS
+11238 " 🔵 Two parallel auth systems are decoupled — custom token guards routes but does not establish Supabase session for RLS
+11239 " 🟣 Nueva ruta API GET /api/admin/companies con Service Role Key
+11240 " 🟣 Nueva ruta API GET /api/admin/companies/[id] para detalle de empresa
+11242 11:11p 🔵 data-layer.ts usa cliente anon de Supabase para getClientes(), sujeto a RLS
+11241 " 🔵 Live probe confirmed: RLS silently returns empty array (not an error) for anon key queries on `companies`
+11243 " 🔐 Logout only clears custom token — Supabase Auth session is never signed out
+11244 " 🔴 getClientes() y getClienteById() migradas a rutas API con Service Role Key
+11245 " 🔵 Dashboard silently shows zero KPIs when RLS blocks — no error handling unlike the clientes page fix
+11246 " ✅ SUPABASE_SERVICE_ROLE_KEY añadida como placeholder vacío en .env.local
+11247 11:12p 🔴 `getClientes()` refactored to use server-side API route with service role key instead of direct anon-key Supabase query
 
-Access 1255k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 287k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

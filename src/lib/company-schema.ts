@@ -7,6 +7,9 @@ interface CompanyInsertInput {
   alias: string;
   plan: CompanyPlan;
   ambiente: string;
+  direccion?: string;
+  municipio?: string;
+  provincia?: string;
 }
 
 const LEGACY_ESTADO_RE = /\[portal_estado:(Activo|Suspendido|Pendiente)\]/;
@@ -53,6 +56,9 @@ export function buildModernCompanyInsertPayload(input: CompanyInsertInput, apiKe
     certificado_estado: 'Pendiente',
     certificado_vence: '—',
     api_key: apiKey,
+    ...(input.direccion ? { direccion: input.direccion } : {}),
+    ...(input.municipio ? { municipio: input.municipio } : {}),
+    ...(input.provincia ? { provincia: input.provincia } : {}),
   };
 }
 
@@ -65,13 +71,15 @@ export function buildLegacyCompanyInsertPayload(
     rnc: input.rnc,
     razon_social: input.razonSocial,
     nombre_comercial: input.alias,
-    direccion: 'Pendiente de completar',
+    direccion: input.direccion || 'Pendiente de completar',
     plan: toLegacyPlan(input.plan),
     ambiente: toLegacyAmbiente(input.ambiente),
     api_key: apiKey,
     limite_facturas_mes: limiteFacturasMes,
     activa: false,
     notas: '[portal_estado:Pendiente]',
+    ...(input.municipio ? { municipio: input.municipio } : {}),
+    ...(input.provincia ? { provincia: input.provincia } : {}),
   };
 }
 

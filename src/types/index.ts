@@ -18,6 +18,10 @@ export interface Company {
   ingresoMes: number;
   mark: number;
   certStatus?: CertStatus;
+  // Datos del emisor ECF (requeridos para XML válido y representación impresa)
+  direccion?: string;
+  municipio?: string;   // Código DGII ProvinciaMunicipioType (ej. "320100")
+  provincia?: string;  // Código DGII ProvinciaMunicipioType (ej. "320000")
 }
 
 export interface Factura {

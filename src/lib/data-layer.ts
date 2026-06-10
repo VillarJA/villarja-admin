@@ -108,6 +108,9 @@ function mapCompany(row: Record<string, unknown>, idx: number): Company {
     certStatus: (['en_proceso', 'certificada'].includes(String(row.certification_status))
       ? String(row.certification_status)
       : 'no_iniciada') as import('@/types').CertStatus,
+    direccion: row.direccion ? String(row.direccion) : undefined,
+    municipio: row.municipio ? String(row.municipio) : undefined,
+    provincia: row.provincia ? String(row.provincia) : undefined,
   };
 }
 
@@ -573,6 +576,9 @@ export interface CreateCompanyInput {
   alias: string;
   plan: Company['plan'];
   ambiente: string;
+  direccion?: string;
+  municipio?: string;
+  provincia?: string;
 }
 
 export async function createCompany(input: CreateCompanyInput): Promise<Company> {

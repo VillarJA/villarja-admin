@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Icon } from '@/components/Icons';
 import { createCompany } from '@/lib/data-layer';
 import { buscarRNC } from '@/lib/padron';
+import { getProvincias, getMunicipios } from '@/lib/dgii-codes';
 import type { Company } from '@/types';
 
 interface Props {
@@ -17,12 +18,18 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
   const [alias, setAlias] = useState('');
   const [plan, setPlan] = useState<Company['plan']>('Pro');
   const [amb, setAmb] = useState('eCF');
+  const [direccion, setDireccion] = useState('');
+  const [provincia, setProvincia] = useState('');
+  const [municipio, setMunicipio] = useState('');
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [padronStatus, setPadronStatus] = useState<'idle' | 'found' | 'suspended' | 'notfound'>('idle');
   const [padronActividad, setPadronActividad] = useState('');
   const [error, setError] = useState('');
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const provincias = getProvincias();
+  const municipios = provincia ? getMunicipios(provincia) : [];
 
   const handleRncChange = (value: string) => {
     setRnc(value);
@@ -66,6 +73,10 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
       setError('RNC, razón social y alias son requeridos.');
       return;
     }
+    if (!direccion.trim()) {
+      setError('La dirección del emisor es requerida para los comprobantes fiscales.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -75,6 +86,9 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
         alias: alias.trim().toUpperCase(),
         plan,
         ambiente: amb,
+        direccion: direccion.trim(),
+        municipio: municipio || undefined,
+        provincia: provincia || undefined,
       });
       onCreated(company, company.apiKey);
     } catch (err) {
@@ -182,6 +196,59 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
               maxLength={20}
               required
             />
+          </div>
+
+          {/* ── Datos del Emisor ECF ─────────────────────────────────────── */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: -2 }}>
+            <p style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+              Datos del Emisor (eCF)
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label className="cfg-label">Dirección *</label>
+                <input
+                  className="cfg-inp"
+                  value={direccion}
+                  onChange={(e) => setDireccion(e.target.value)}
+                  placeholder="Calle / Av., No., Sector"
+                  maxLength={100}
+                />
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                  Requerido por el XSD del eCF (T32 y otros)
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="cfg-label">Provincia</label>
+                  <select
+                    className="cfg-inp"
+                    value={provincia}
+                    onChange={(e) => { setProvincia(e.target.value); setMunicipio(''); }}
+                  >
+                    <option value="">— Seleccionar —</option>
+                    {provincias.map((p) => (
+                      <option key={p.code} value={p.code}>{p.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="cfg-label">Municipio</label>
+                  <select
+                    className="cfg-inp"
+                    value={municipio}
+                    onChange={(e) => setMunicipio(e.target.value)}
+                    disabled={!provincia}
+                  >
+                    <option value="">— Seleccionar —</option>
+                    {municipios.map((m) => (
+                      <option key={m.code} value={m.code}>{m.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
