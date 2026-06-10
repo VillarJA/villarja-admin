@@ -52,18 +52,21 @@ export function DonutChart({ data, size = 168 }: DonutChartProps) {
       </svg>
       <div className="donut-legend">
         {data.map((d, i) => (
-          <div
+          <button
+            type="button"
             key={i}
             className="legend-item"
             onMouseEnter={() => setHi(i)}
             onMouseLeave={() => setHi(null)}
-            style={{ opacity: hi == null || hi === i ? 1 : 0.45, cursor: 'pointer' }}
+            onFocus={() => setHi(i)}
+            onBlur={() => setHi(null)}
+            style={{ opacity: hi == null || hi === i ? 1 : 0.45, cursor: 'pointer', border: 'none', background: 'transparent', padding: 0, textAlign: 'left', width: '100%' }}
           >
             <span className="lk" style={{ background: d.color }} />
             <span className="ll">{d.label}</span>
             <span className="lv">{fmtNum(d.value)}</span>
             <span className="lp">{(d.value / total * 100).toFixed(0)}%</span>
-          </div>
+          </button>
         ))}
       </div>
     </div>

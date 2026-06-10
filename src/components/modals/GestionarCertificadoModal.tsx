@@ -85,12 +85,12 @@ export function GestionarCertificadoModal({ company, onClose, onUpdated }: Props
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="card card-pad" style={{ width: 440, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="gestionar-cert-title" className="card card-pad" style={{ width: 440, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
           <div>
-            <h3 style={{ margin: 0, marginBottom: 2 }}>Gestionar certificado</h3>
+            <h3 id="gestionar-cert-title" style={{ margin: 0, marginBottom: 2 }}>Gestionar certificado</h3>
             <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>{company.razon}</p>
           </div>
           <button className="kbtn" onClick={onClose} disabled={loading}>

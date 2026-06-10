@@ -8,75 +8,88 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <claude-mem-context>
 # Memory Context
 
-# [villarja-admin-portal] recent context, 2026-06-09 11:12pm AST
+# [villarja-admin-portal] recent context, 2026-06-10 12:38pm AST
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (20,071t read) | 286,846t work | 93% savings
+Stats: 50 obs (17,775t read) | 652,284t work | 97% savings
 
-### Jun 9, 2026
-S1020 Review and fix portal: tab icons, client certification status display, XML data sources, API validation, and Fluxgo Wizard replacement (Jun 9, 1:31 PM)
-S1021 DGII certeCF certification UI: Step 3 approval test set modal + markStep error handling + badge CSS fixes, committed and pushed (Jun 9, 1:41 PM)
-S1022 Fix Vercel deploy failure caused by missing `certStatus` field in Company type (Jun 9, 1:55 PM)
-S1023 Fix "Ruta no encontrada: POST /api/v1/certification/progress" error on "Marcar como completado" button (Jun 9, 2:15 PM)
-11147 2:19p 🔵 Missing API Route: POST /api/v1/certification/progress
-11148 2:20p 🔵 Certification Progress API Committed But Not Pushed to Origin
-11149 " 🔴 Deployed Certification Progress API Fix to Production
-S1024 Fix "No autenticado" error appearing in the villarja-admin-portal when accessing certification progress endpoints (Jun 9, 2:20 PM)
-11152 10:15p 🔵 Authentication Error: "No autenticado" Appearing in UI
-11155 10:16p 🔵 villarja-ecf-api Has No TypeScript Source Files in Expected Locations
-11156 " 🔵 villarja-ecf-api Full TypeScript Project Structure Mapped
-11158 10:17p 🔵 villarja-ecf-api Express App Architecture and Route Authentication Model
-11159 " 🔵 villarja-ecf-api API Key Auth Uses PostgreSQL RLS Context Per Request
-11167 10:19p 🔵 villarja-ecf-api Full API Route Surface at /api/v1
-11169 10:20p 🔵 Root Cause Found: "No autenticado" Comes from Certification Progress Endpoints Checking Wrong Auth Context
-11170 " 🔴 Fixed "No autenticado" Bug in Certification Progress Endpoints
-11173 10:21p 🔴 Certification Progress Fix Committed to villarja-ecf-api (commit 197c4b9)
-11174 " ✅ Certification Progress Fix Pushed to GitHub — Render Auto-Deploy Triggered
-S1025 Fix "No autenticado" error on certification progress endpoints — diagnosed, fixed, committed, pushed, and DB verified (Jun 9, 10:21 PM)
-11177 10:23p 🔵 villarja-ecf-api Production Database Already Up to Date
-S1027 Fix DGII eCF certification step 2: empty XML fields causing rejections, cases stuck at "enviado", and DGII rejection log not visible in admin portal (Jun 9, 10:23 PM)
-11182 10:30p 🔵 DGII eCF Test Suite Rejection: Missing Required Fields in Step 2 Wizard
-11183 " 🔵 eCF Certification Wizard Architecture: 15-Step DGII Process in villarja-admin-portal
-11184 10:31p 🔵 CertificacionModal: Excel Parsed with '#e' Defaults; DGII Error Messages Truncated in UI
-11185 " 🔵 Root Cause: Certification Cases Show 'sent' but Never Poll DGII for Acceptance; Column Header Mismatch Likely Empties Key Fields
-11186 10:32p 🔵 dgii-client.service.ts: consultarResultado Exists but Is Never Called After sendCase
-11188 10:35p 🔵 ECF API Route Map: No Status-Poll Endpoint for Certification Cases
-11193 10:37p 🔴 certification.controller.ts: Import consultarResultado to Enable Post-Send DGII Status Polling
-11194 10:38p 🔴 Fix DGII Excel Column Header Mismatch: normalizeExcelKey Strips Accents and Whitespace
-11195 " ✅ normalizeExcelKey: Add ESLint Disable Comment for Unicode Regex
-11196 10:39p 🔴 Fix Unicode Combining Character Encoding in normalizeExcelKey Regex
-11197 " 🔴 normalizeExcelKey: Replace Literal Unicode Chars with \u0300-\u036f Escape Range
-11199 10:40p 🔵 normalizeExcelKey Regex Still Shows Literal Unicode in Read Output After Python Replacement
-11200 " 🔵 Confirmed: normalizeExcelKey Regex Uses Proper \u0300-\u036f Escape Sequences in Source File
-11201 " 🔴 importTestSet: normalizeTestCaseKeys Now Applied at Import Time Before DB Storage
-11202 " 🔴 sendCase: Inline DGII Error Field Now Triggers Immediate Rejection and Reset
-11203 10:41p 🟣 New checkCaseStatus Endpoint: POST /certification/cases/:caseId/check Polls DGII for Final Acceptance
-11204 " 🟣 Route Registered: POST /certification/cases/:caseId/check Now Live in ECF API
-11205 " 🟣 Admin Portal Proxy Route Created: /api/certification/cases/[caseId]/check
-11206 10:43p 🟣 CertificacionModal.tsx fully updated with DGII status verification and full error display
-S1028 Fix DGII eCF certification step 2: empty XML fields causing rejections, cases stuck at "enviado", DGII rejection log not visible — all fixes implemented, committed, and pushed to GitHub (Jun 9, 10:46 PM)
-S1030 After completing DGII certification fixes, investigated why a company might not appear in the clientes list — found silent error swallowing in getClientes() and improved error visibility + added manual refresh (Jun 9, 10:48 PM)
-S1031 Full session: fix DGII eCF certification rejections (empty XML fields, silent errors, no status polling) + improve clientes page error visibility (Jun 9, 11:03 PM)
-11231 11:08p 🔵 Clientes no visibles en UI tras correcciones de seguridad en Supabase
-11232 " 🔵 Supabase RLS on `companies` table blocking client visibility after security changes
-11233 11:09p 🔵 RLS policy requires `auth.role() = 'authenticated'` — anon key alone is insufficient to read `companies`
-11234 " 🔵 No service role key — entire portal relies on anon key + Supabase Auth session for RLS access
-11235 11:10p 🔵 Demo login bypasses Supabase Auth — causes silent RLS block on all `companies` queries
-11236 " 🔵 No existen rutas API admin en src/app/api/admin/
-11237 " 🟣 Creado cliente Supabase con Service Role Key para bypass de RLS
-11238 " 🔵 Two parallel auth systems are decoupled — custom token guards routes but does not establish Supabase session for RLS
-11239 " 🟣 Nueva ruta API GET /api/admin/companies con Service Role Key
-11240 " 🟣 Nueva ruta API GET /api/admin/companies/[id] para detalle de empresa
-11242 11:11p 🔵 data-layer.ts usa cliente anon de Supabase para getClientes(), sujeto a RLS
-11241 " 🔵 Live probe confirmed: RLS silently returns empty array (not an error) for anon key queries on `companies`
-11243 " 🔐 Logout only clears custom token — Supabase Auth session is never signed out
-11244 " 🔴 getClientes() y getClienteById() migradas a rutas API con Service Role Key
-11245 " 🔵 Dashboard silently shows zero KPIs when RLS blocks — no error handling unlike the clientes page fix
-11246 " ✅ SUPABASE_SERVICE_ROLE_KEY añadida como placeholder vacío en .env.local
-11247 11:12p 🔴 `getClientes()` refactored to use server-side API route with service role key instead of direct anon-key Supabase query
+### Jun 10, 2026
+S1040 Add XML download capability to CertificacionModal so admins can download signed XMLs for manual upload to the DGII certecf portal (required for tipo 32 &lt; RD$250K Step 2 manual upload) (Jun 10, 7:07 AM)
+S1041 Fix DGII eCF XML rejection: "La estructura del archivo XML no es válido" for Factura de Consumo Electrónica &lt;250Mil — portal expects full eCF format, not RFCE summary (Jun 10, 7:24 AM)
+S1042 Fix rechazo de Facturas de Consumo menores a 250,000 DOP al subir XML manualmente al portal DGII de certificación (T32 RFCE) (Jun 10, 8:58 AM)
+S1043 Fix "S/D" placeholder appearing on printed ECF documents — add DireccionEmisor, Provincia, and Municipio fields to company creation form and ECF API fallback logic (Jun 10, 9:09 AM)
+S1044 Test RFCE XML download to verify ECF XML now contains correct Emisor fields (no S/D placeholders) (Jun 10, 9:29 AM)
+S1045 Fix DGII eCF certification test set rejections caused by IndicadorMontoGravado field validation errors — value 0 being sent when dataset expected empty, and vice versa (Jun 10, 9:45 AM)
+S1046 Impeccable audit of villarja-admin-portal — comprehensive technical quality audit across accessibility, performance, theming, responsive design, and anti-patterns (Jun 10, 10:26 AM)
+S1047 /impeccable audit on villarja-admin-portal — comprehensive accessibility, performance, theming, and responsive audit across all components and global stylesheet (Jun 10, 10:52 AM)
+S1048 Impeccable audit of villarja-admin-portal — full technical quality scan across 5 dimensions with scored report (Jun 10, 11:12 AM)
+11628 12:02p 🔴 certification.controller.ts: Replaced Live Clock FechaHoraFirma with Stable Noon Timestamp Derived from FechaEmision
+11629 " 🔴 RFCE Certification: Removed Stale XML Cache Check — Always Rebuild XML on Each Submission
+11630 " 🔴 XML Download Path in certification.controller.ts Also Patched to Always Rebuild Instead of Using Cached XML
+11631 12:03p 🟣 Unit Test Added: Verifies Stable Certification Signature Timestamp Derived from FechaEmision
+11632 " 🔵 All 5 Unit Tests Pass After Stable Timestamp Fix in certification.controller.ts
+11633 " 🔵 villarja-ecf-api TypeScript Build Passes Clean After All certification.controller.ts Changes
+11634 " ✅ Committed: "fix: rebuild certification manual xml from current set" — villarja-ecf-api master 19483c2
+11635 " ✅ Fix Pushed to GitHub: villarja-ecf-api master a09c9d1..19483c2
+11636 12:06p 🔵 Post-Fix Generated XML for E320000000012 Confirms MunicipioComprador and Stable Timestamp Are Present
+11637 " 🔵 Impeccable Audit Skill — Reference Documentation Structure
+11638 12:07p 🔵 DGII Test Data Stores Municipio as "#e" Placeholder — XML Builder Resolves It to MunicipioComprador=030307
+11639 " 🔵 villarja-admin-portal Missing PRODUCT.md and DESIGN.md
+11640 " 🔵 villarja-admin-portal Component Inventory
+11641 12:08p 🔵 villarja-admin-portal Design System — globals.css Full Token Inventory
+11642 " 🔵 villarja-admin-portal App Route Structure
+11643 " 🔵 All 4 TipoeCF=32 Certification Cases Now Show estado="accepted" After Fix
+11644 12:09p 🔵 No Hard-Coded Hex Colors in TSX Components — Theming Score Positive
+11645 " 🔵 LineChart Has Hardcoded SVG Width (W=760) — Responsive Issue
+11646 " 🔵 Dashboard Page Uses KPI Card Grid — Anti-Pattern Present
+11647 " 🔵 CertificacionModal — Complex DGII Certification Test Workflow
+11648 " 🔵 KPICard Has No ARIA Semantics — Accessibility Gap
+11649 " 🔵 ToggleRow Switch Button Missing role="switch" and aria-checked — WCAG Violation
+11650 12:13p 🔵 Fluxymed Certification Modal Step Audit Initiated
+11651 " 🔵 Fluxymed vs VillarJA Certification Modal Audit Plan
+11652 12:14p 🔵 VillarJA CertificacionTab: 15-Step Certification Flow Structure
+11653 " 🔵 VillarJA CertificacionModal: Step 2 Test Set Upload & Send Flow
+11654 " 🔵 Fluxymed Certification: 15-Step Wizard Structure in cert-client.tsx
+11655 " 🔵 Fluxymed certification-actions.ts: Server Actions for 15-Step DGII Wizard
+11656 12:15p 🔵 VillarJA CertificacionTab: Step 3 Uses AprobacionModal; Step 8 Tests Digital Signature
+11657 " 🔵 VillarJA AprobacionModal: Step 3 Commercial Approval Excel Upload & Send
+11658 " 🔵 Fluxymed Step 5 PDF Generator: RI Generation with 10MB Size Cap and DGII Slot Mapping
+11659 " 🔵 Fluxymed Certification Session Initialization: Step 1 Auto-Completed, Paso4 State Pre-Built
+11660 12:16p 🔵 VillarJA ECF API: Certification Progress Stored as companies Table Array; No Step Validation
+11661 " 🔵 VillarJA ECF API: Case Rejection Resets All Sibling Cases; XML Download Re-Signs On-Demand
+11662 12:17p 🔵 Fluxymed Steps 9 & 11: Real Receptor Logs Table vs VillarJA Textual Instructions
+11663 " 🔵 Fluxymed Certification renderStepContent: Complete Component Mapping for All 15 Steps
+11664 " ✅ Smoothed CSS animation easing curves across KPI and badge elements
+11665 " 🔵 Audit Finding: VillarJA Steps 7/12 Show 3 URLs; Fluxymed Shows 4 (Missing Token URL)
+11666 " ✅ Replaced hardcoded color values with CSS variable for dashboard text colors
+11667 12:18p ✅ Added aria-label accessibility attribute to client search input
+11668 " ✅ Enhanced toggle switch accessibility and theme support in configuration page
+11669 " ✅ Made donut chart legend items keyboard accessible by converting to button elements
+11670 12:19p ✅ Replaced hardcoded brand gradient color with CSS variable in logo elements
+11671 " 🔄 Moved KPI grid layout from inline styles to CSS class
+11672 " ✅ Added keyboard navigation support to clients table rows
+11673 " 🔄 Converted XLSX library to dynamic import for lazy loading
+11674 " 🔄 Moved chart grid layout from inline styles to CSS class
+11675 " ✅ Added keyboard focus indicators and responsive grid classes to globals.css
+11676 " 🔄 Completed dashboard grid layout refactoring by removing final inline style
+11677 12:20p ✅ Added keyboard navigation to dashboard invoice table rows
+S1049 /impeccable audit — comprehensive cleanup of animation easing, color hardcoding, accessibility, responsive design, and code splitting (Jun 10, 12:22 PM)
+**Investigated**: Animation curves in globals.css (kpiPop, badgePop); hardcoded colors in logo gradients and component styles; accessibility patterns in interactive elements (toggles, tables, search inputs, chart legends); layout definitions across dashboard pages; Excel import loading strategy in certification modal
 
-Access 287k tokens of past work via get_observations([IDs]) or mem-search skill.
+**Learned**: The codebase had scattered hardcoded color values and inline grid definitions reducing maintainability; animation easing was inconsistent (overshoot curves mixed with standard ease-out); interactive elements lacked semantic ARIA attributes and keyboard navigation; responsive design was missing entirely; heavy dependencies like XLSX were loaded statically even when unused. CSS variable system was already established but underutilized.
+
+**Completed**: — Animation: unified kpiPop and badgePop easing curves to cubic-bezier(0.16, 1, 0.3, 1)
+    — Colors: replaced #d33 with var(--brand-600), #9092a8 with var(--side-text-dim), #fff toggle knob with var(--surface)
+    — Accessibility: added role="switch", aria-checked, aria-label to toggle buttons; added tabIndex={0} + onKeyDown(Enter) to 2 tables; added aria-label to search input; converted DonutChart legend divs to keyboard-focusable buttons; added :focus-visible rings for 11 element classes
+    — Responsive: created .grid-kpi (4→2→1 col at breakpoints) and .grid-2col (2-col→1-col) classes; migrated all 3 dashboard grid layouts from inline styles to these classes
+    — Performance: converted XLSX import to dynamic on-demand import in CertificacionModal
+    — Build: production build passed clean (29s compile, TypeScript OK, 22 pages generated)
+
+**Next Steps**: Session appears complete; build verified clean. If continuing, next targets would be: audit other components for remaining hardcoded colors or inline styles; extend keyboard navigation pattern to other clickable elements (modal buttons, pagination); review other charts/tables for same accessibility treatment; consider dark-mode validation of all color variable changes.
+
+
+Access 652k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

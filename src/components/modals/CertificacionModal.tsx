@@ -24,7 +24,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Icon } from '@/components/Icons';
 import type { Company } from '@/types';
-import * as XLSX from 'xlsx';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -83,7 +82,8 @@ interface Props {
 
 // ─── Excel parser ──────────────────────────────────────────────────────────────
 
-function parseExcelTestSet(file: File): Promise<Record<string, unknown>[]> {
+async function parseExcelTestSet(file: File): Promise<Record<string, unknown>[]> {
+  const XLSX = await import('xlsx');
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -385,6 +385,9 @@ export function CertificacionModal({ company, onClose }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="certificacion-title"
         className="card"
         style={{
           width: '100%', maxWidth: 860, maxHeight: '92vh',
@@ -401,7 +404,7 @@ export function CertificacionModal({ company, onClose }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <Icon name="shield" size={20} style={{ color: 'var(--brand)' }} />
             <div>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
+              <div id="certificacion-title" style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
                 Set de Pruebas DGII
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -417,7 +420,7 @@ export function CertificacionModal({ company, onClose }: Props) {
         {/* Toast */}
         {toast && (
           <div style={{
-            background: 'var(--success-bg, #ecfdf5)', color: 'var(--success, #16a34a)',
+            background: 'var(--success-bg)', color: 'var(--success)',
             padding: '0.5rem 1.5rem', fontSize: '0.8125rem', flexShrink: 0,
             borderBottom: '1px solid var(--border)',
           }}>
@@ -428,7 +431,7 @@ export function CertificacionModal({ company, onClose }: Props) {
         {/* Error */}
         {error && (
           <div style={{
-            background: 'var(--danger-bg, #fef2f2)', color: 'var(--danger, #dc2626)',
+            background: 'var(--danger-bg)', color: 'var(--danger)',
             padding: '0.625rem 1.5rem', fontSize: '0.8125rem', flexShrink: 0,
             borderBottom: '1px solid var(--border)',
           }}>
@@ -439,8 +442,8 @@ export function CertificacionModal({ company, onClose }: Props) {
         {/* DGII Error Detail Panel */}
         {expandedCase?.error_msg && (
           <div style={{
-            background: '#fef2f2',
-            borderBottom: '1px solid #fecaca',
+            background: 'var(--danger-bg)',
+            borderBottom: '1px solid var(--danger-bd)',
             padding: '0.75rem 1.5rem',
             flexShrink: 0,
           }}>
@@ -448,7 +451,7 @@ export function CertificacionModal({ company, onClose }: Props) {
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               marginBottom: '0.5rem',
             }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#dc2626' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--danger)' }}>
                 Respuesta DGII — {expandedCase.encf}
               </span>
               <button
@@ -462,7 +465,7 @@ export function CertificacionModal({ company, onClose }: Props) {
             <pre style={{
               margin: 0,
               fontSize: '0.7rem',
-              color: '#7f1d1d',
+              color: 'var(--danger)',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               lineHeight: 1.55,
@@ -669,7 +672,7 @@ export function CertificacionModal({ company, onClose }: Props) {
                           <td
                             colSpan={6}
                             style={{
-                              background: 'var(--surface-alt, #f8f9fa)',
+                              background: 'var(--surface-alt)',
                               fontSize: '0.6875rem',
                               fontWeight: 700,
                               color: 'var(--text-muted)',
@@ -725,7 +728,7 @@ export function CertificacionModal({ company, onClose }: Props) {
                                       onClick={() => setExpandedErrorId(isExpanded ? null : c.id)}
                                       style={{
                                         background: 'none', border: 'none', padding: '0 0.25rem',
-                                        cursor: 'pointer', color: '#dc2626', fontSize: '0.7rem',
+                                        cursor: 'pointer', color: 'var(--danger)', fontSize: '0.7rem',
                                         textDecoration: 'underline', lineHeight: 1.3,
                                         display: 'flex', alignItems: 'center', gap: '0.2rem',
                                       }}
@@ -760,7 +763,7 @@ export function CertificacionModal({ company, onClose }: Props) {
                                 )}
                                 {c.estado === 'accepted' && (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                    <span style={{ fontSize: '0.7rem', color: 'var(--success, #16a34a)' }}>✓</span>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--success)' }}>✓</span>
                                     <button
                                       title="Descargar XML firmado"
                                       onClick={() => downloadXml(c.id, c.encf, c.tipo_ecf, c.is_rfce)}

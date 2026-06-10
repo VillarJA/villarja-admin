@@ -71,7 +71,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 18 }}>
+      <div className="grid grid-kpi" style={{ marginBottom: 18 }}>
         <KPICard icon="building" iconBg="var(--brand-soft)" iconColor="var(--brand)" label="Clientes activos" value={String(clientesActivos)} />
         <KPICard icon="receipt" iconBg="var(--info-bg)" iconColor="var(--info)" label="e-CF en plataforma" value={fmtNum(facturas.length)} />
         <KPICard icon="dollar" iconBg="var(--ok-bg)" iconColor="var(--ok)" label="Ingresos del mes" value={'$' + fmtNum(ingresosMes)} unit="DOP" />
@@ -79,7 +79,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid" style={{ gridTemplateColumns: '1.55fr 1fr', marginBottom: 18 }}>
+      <div className="grid grid-2col" style={{ marginBottom: 18 }}>
         <div className="card">
           <div className="card-head">
             <div>
@@ -108,7 +108,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Table + DGII */}
-      <div className="grid" style={{ gridTemplateColumns: '1.55fr 1fr' }}>
+      <div className="grid grid-2col">
         <div className="card">
           <div className="card-head">
             <div><h3>Últimas facturas emitidas</h3></div>
@@ -128,7 +128,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {recientes.map((f) => (
-                    <tr key={f.id} className="clickable" onClick={() => router.push('/admin/facturas')}>
+                    <tr key={f.id} className="clickable" tabIndex={0} onClick={() => router.push('/admin/facturas')} onKeyDown={(e) => { if (e.key === 'Enter') router.push('/admin/facturas'); }}>
                       <td>
                         <span className="mono">{f.encf}</span>
                         <span className="tag-type" style={{ marginLeft: 8 }}>{f.tipo}</span>
@@ -176,13 +176,13 @@ export default function DashboardPage() {
 
           <div className="card card-pad" style={{ background: 'var(--navy)', color: '#fff', borderColor: 'transparent' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 12.5, color: '#9092a8', fontWeight: 600 }}>AMBIENTE DE PRODUCCIÓN</span>
+              <span style={{ fontSize: 12.5, color: 'var(--side-text-dim)', fontWeight: 600 }}>AMBIENTE DE PRODUCCIÓN</span>
               <span className="badge ok" style={{ background: 'rgba(31,157,87,0.18)' }}><i className="bdot" />eCF</span>
             </div>
             <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: '-0.5px', marginBottom: 2 }} className="mono">
               ecf.villarja.com
             </div>
-            <div style={{ fontSize: 12, color: '#9092a8' }}>API v2 · {clientes.length} clientes activos</div>
+            <div style={{ fontSize: 12, color: 'var(--side-text-dim)' }}>API v2 · {clientes.length} clientes activos</div>
           </div>
         </div>
       </div>

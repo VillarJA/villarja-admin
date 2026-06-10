@@ -219,6 +219,9 @@ export function AprobacionModal({ company, onClose }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="aprobacion-title"
         className="card"
         style={{
           width: '100%', maxWidth: 860, maxHeight: '92vh',
@@ -233,7 +236,7 @@ export function AprobacionModal({ company, onClose }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <Icon name="checkcircle" size={20} style={{ color: 'var(--brand)' }} />
             <div>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
+              <div id="aprobacion-title" style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text)' }}>
                 Pruebas de Aprobación Comercial
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>

@@ -63,7 +63,8 @@ export function Sidebar({ route, compact, onNavigate, contingenciaBadge, dgiiSta
             {g.items.map((it) => {
               const active = route === it.id || (it.id === 'clientes' && route === 'cliente');
               return (
-                <div
+                <button
+                  type="button"
                   key={it.id}
                   className={`side-item${active ? ' active' : ''}`}
                   onClick={() => onNavigate(it.id)}
@@ -74,7 +75,7 @@ export function Sidebar({ route, compact, onNavigate, contingenciaBadge, dgiiSta
                   {it.id === 'contingencia' && contingenciaBadge != null && contingenciaBadge > 0 && (
                     <span className="side-badge">{contingenciaBadge > 99 ? '99+' : contingenciaBadge}</span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -84,7 +85,7 @@ export function Sidebar({ route, compact, onNavigate, contingenciaBadge, dgiiSta
         {COMING_SOON.map((m) => (
           <div key={m.label}>
             <div className="side-group-label">{m.label}</div>
-            <div className="side-item disabled" title={`${m.label} (Próximamente)`}>
+            <button type="button" className="side-item disabled" title={`${m.label} (Próximamente)`} disabled>
               <Icon name={m.icon} />
               <span>{m.label}</span>
               {!compact && (
@@ -95,7 +96,7 @@ export function Sidebar({ route, compact, onNavigate, contingenciaBadge, dgiiSta
                   Próximamente
                 </span>
               )}
-            </div>
+            </button>
           </div>
         ))}
       </nav>

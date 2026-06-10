@@ -109,11 +109,12 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
     >
       <div
         className="card card-pad"
+        role="dialog" aria-modal="true" aria-labelledby="nuevo-cliente-title"
         style={{ width: 480, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
-            <h2 style={{ marginBottom: 2 }}>Nuevo Cliente</h2>
+            <h2 id="nuevo-cliente-title" style={{ marginBottom: 2 }}>Nuevo Cliente</h2>
             <p className="muted" style={{ fontSize: 12.5 }}>El API Key se genera automáticamente</p>
           </div>
           <button className="kbtn" onClick={onClose}><Icon name="close" /></button>

@@ -45,10 +45,10 @@ export function CambiarPlanModal({ company, onClose, onUpdated }: Props) {
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="card card-pad" style={{ width: 420, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="cambiar-plan-title" className="card card-pad" style={{ width: 420, maxWidth: '94vw', boxShadow: 'var(--shadow-lg)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
-            <h3 style={{ marginBottom: 2 }}>Cambiar Plan</h3>
+            <h3 id="cambiar-plan-title" style={{ marginBottom: 2 }}>Cambiar Plan</h3>
             <p className="muted" style={{ fontSize: 12.5 }}>{company.razon}</p>
           </div>
           <button className="kbtn" onClick={onClose}><Icon name="close" /></button>

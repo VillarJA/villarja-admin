@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { fmtNum } from '@/lib/data';
 
 interface LineChartProps {
@@ -25,14 +25,17 @@ export function LineChart({ data, height = 230 }: LineChartProps) {
   const yticks = 4;
   const labels = ['hace 30d', 'hace 20d', 'hace 10d', 'hoy'];
   const [hover, setHover] = useState<number | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
 
   return (
     <svg
       className="chart-line"
       viewBox={`0 0 ${W} ${H}`}
+      onMouseEnter={(e) => { rectRef.current = e.currentTarget.getBoundingClientRect(); }}
       onMouseLeave={() => setHover(null)}
       onMouseMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
+        const r = rectRef.current;
+        if (!r) return;
         const mx = ((e.clientX - r.left) / r.width) * W;
         let idx = Math.round(((mx - padL) / iw) * (data.length - 1));
         idx = Math.max(0, Math.min(data.length - 1, idx));
@@ -79,8 +82,8 @@ export function LineChart({ data, height = 230 }: LineChartProps) {
           <circle cx={x(hover)} cy={y(data[hover])} r="4.5" fill="var(--brand)" stroke="var(--surface)" strokeWidth="2" />
           <g transform={`translate(${Math.min(x(hover), W - 110)}, ${Math.max(y(data[hover]) - 42, 4)})`}>
             <rect width="104" height="32" rx="7" fill="var(--navy)" />
-            <text x="10" y="14" fill="#fff" fontSize="11" fontWeight="700">{fmtNum(data[hover])} e-CF</text>
-            <text x="10" y="26" fill="#9092a8" fontSize="9.5">día {hover + 1} de 30</text>
+            <text x="10" y="14" fill="var(--side-text)" fontSize="11" fontWeight="700">{fmtNum(data[hover])} e-CF</text>
+            <text x="10" y="26" fill="var(--side-text-dim)" fontSize="9.5">día {hover + 1} de 30</text>
           </g>
         </g>
       )}

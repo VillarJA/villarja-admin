@@ -131,6 +131,7 @@ export default function ClientesPage() {
           <div className="search-inline">
             <Icon name="search" />
             <input
+              aria-label="Buscar clientes"
               placeholder="Buscar por RNC, razón social o alias…"
               value={q}
               onChange={(e) => { setQ(e.target.value); setPage(1); }}
@@ -155,7 +156,7 @@ export default function ClientesPage() {
             </thead>
             <tbody>
               {pageRows.map((c) => (
-                <tr key={c.id} className="clickable" onClick={() => router.push(`/admin/clientes/${c.id}`)}>
+                <tr key={c.id} className="clickable" tabIndex={0} onClick={() => router.push(`/admin/clientes/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/admin/clientes/${c.id}`); }}>
                   <td>
                     <div className="cell-co">
                       <CoMark cliente={c} />

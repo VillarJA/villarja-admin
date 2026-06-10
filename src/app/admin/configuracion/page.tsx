@@ -37,6 +37,9 @@ function ToggleRow({
         {hint && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{hint}</div>}
       </div>
       <button
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
         onClick={() => onChange(!value)}
         style={{
           width: 42, height: 24, borderRadius: 14, border: 'none',
@@ -47,7 +50,7 @@ function ToggleRow({
       >
         <span style={{
           position: 'absolute', top: 3, left: value ? 21 : 3,
-          width: 18, height: 18, borderRadius: '50%', background: '#fff',
+          width: 18, height: 18, borderRadius: '50%', background: 'var(--surface)',
           transition: 'left .15s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
         }} />
       </button>

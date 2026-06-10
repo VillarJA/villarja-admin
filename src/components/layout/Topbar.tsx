@@ -59,7 +59,7 @@ export function Topbar({ route, onToggleSidebar, onNotification, onLogout, dark,
 
       <div className="topbar-search">
         <Icon name="search" />
-        <input placeholder="Buscar clientes, eNCF, RNC…" />
+        <input aria-label="Buscar clientes, eNCF, RNC" placeholder="Buscar clientes, eNCF, RNC…" />
       </div>
 
       <div className="topbar-spacer" />
