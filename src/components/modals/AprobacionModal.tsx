@@ -14,7 +14,7 @@ interface AprobacionCase {
   fechaEmision: string;
   montoTotal: number;
   rncComprador: string;
-  estado: 1 | 0;
+  estado: 1 | 2;
   detalleMotivoRechazo: string;
   result: 'pending' | 'ok' | 'error';
   errorMsg?: string;
@@ -48,6 +48,12 @@ function pick(row: Record<string, unknown>, ...aliases: string[]): string {
   return '';
 }
 
+function normalizeEstadoAcecf(value: unknown): 1 | 2 {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === '0' || raw === '2' || raw === 'rechazado' || raw === 'rechazo') return 2;
+  return 1;
+}
+
 function parseAprobacionExcel(file: File, fallbackRncComprador: string): Promise<AprobacionCase[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -63,8 +69,7 @@ function parseAprobacionExcel(file: File, fallbackRncComprador: string): Promise
               row,
               'estado', 'resultado', 'aprobacion', 'respuesta', 'tipo respuesta',
             ).toLowerCase();
-            const estado: 1 | 0 =
-              estadoRaw === '0' || estadoRaw === 'rechazado' || estadoRaw === 'rechazo' ? 0 : 1;
+            const estado = normalizeEstadoAcecf(estadoRaw);
             const rncComprador =
               pick(row, 'rnc comprador', 'rnccomprador', 'comprador', 'rnc receptor', 'rnc_comprador') ||
               fallbackRncComprador;
@@ -111,7 +116,10 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
     try {
       const cached = localStorage.getItem(PASO3_KEY);
       if (cached) {
-        const parsed = JSON.parse(cached) as AprobacionCase[];
+        const parsed = (JSON.parse(cached) as AprobacionCase[]).map((item) => ({
+          ...item,
+          estado: normalizeEstadoAcecf(item.estado),
+        }));
         if (parsed.length > 0) {
           setCases(parsed);
           setViewStep('cases');
@@ -170,7 +178,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
   function toggleEstado(id: number) {
     setCases((prev) =>
       prev.map((c) =>
-        c.id === id ? { ...c, estado: (c.estado === 1 ? 0 : 1) as 1 | 0, detalleMotivoRechazo: '' } : c,
+        c.id === id ? { ...c, estado: (c.estado === 1 ? 2 : 1) as 1 | 2, detalleMotivoRechazo: '' } : c,
       ),
     );
   }
@@ -527,7 +535,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
                                 >
                                   {c.estado === 1 ? '✓ Aprobar' : '✗ Rechazar'}
                                 </button>
-                                {c.estado === 0 && (
+                                {c.estado === 2 && (
                                   <input
                                     type="text"
                                     placeholder="Motivo del rechazo…"
