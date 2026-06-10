@@ -275,6 +275,41 @@ export function CertificacionModal({ company, onClose }: Props) {
     showToast('Todos los casos enviados');
   }
 
+  // ── Download XML for a single case ──
+  async function downloadXml(id: string, encf: string, tipo: number, isRfce: boolean) {
+    try {
+      const res = await fetch(`/api/certification/cases/${id}/xml`, {
+        headers: { 'x-api-key': apiKey },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError(json.error ?? 'Error al descargar XML');
+        return;
+      }
+      const xml = await res.text();
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${encf}_T${tipo}${isRfce ? '_RFCE' : ''}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al descargar XML');
+    }
+  }
+
+  // ── Download all accepted cases as individual XMLs ──
+  async function handleDownloadAll() {
+    setError('');
+    const accepted = cases.filter((c) => c.estado === 'accepted' || c.estado === 'sent');
+    for (const c of accepted) {
+      await downloadXml(c.id, c.encf, c.tipo_ecf, c.is_rfce);
+      await new Promise<void>((r) => setTimeout(r, 350));
+    }
+    showToast(`${accepted.length} XML descargados`);
+  }
+
   // ── Reset all ──
   async function handleReset() {
     setLoading(true);
@@ -576,6 +611,18 @@ export function CertificacionModal({ company, onClose }: Props) {
                     {checkingId ? 'Verificando…' : `Verificar enviados (${sentCount})`}
                   </button>
                 )}
+                {cases.some((c) => c.estado === 'accepted' || c.estado === 'sent') && (
+                  <button
+                    className="btn"
+                    onClick={handleDownloadAll}
+                    disabled={runningAll || loading}
+                    style={{ fontSize: '0.8125rem' }}
+                    title="Descarga los XML firmados para subirlos manualmente al portal DGII"
+                  >
+                    <Icon name="download" size={14} style={{ marginRight: '0.35rem' }} />
+                    Descargar XML
+                  </button>
+                )}
                 <button
                   className="btn btn-primary"
                   onClick={handleSendAll}
@@ -712,7 +759,20 @@ export function CertificacionModal({ company, onClose }: Props) {
                                   </div>
                                 )}
                                 {c.estado === 'accepted' && (
-                                  <span style={{ fontSize: '0.7rem', color: 'var(--success, #16a34a)' }}>✓</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--success, #16a34a)' }}>✓</span>
+                                    <button
+                                      title="Descargar XML firmado"
+                                      onClick={() => downloadXml(c.id, c.encf, c.tipo_ecf, c.is_rfce)}
+                                      style={{
+                                        background: 'none', border: 'none', padding: '0 0.2rem',
+                                        cursor: 'pointer', color: 'var(--text-muted)',
+                                        lineHeight: 1,
+                                      }}
+                                    >
+                                      <Icon name="download" size={13} />
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
