@@ -97,6 +97,7 @@ function buildFacturas(n: number): Factura[] {
       id: 'f' + pad(i, 4),
       encf: 'E' + t + pad(seq, 10),
       tipo: t,
+      ambiente: i % 4 === 0 ? 'ecf' : 'certecf',
       clienteId: cli.id,
       cliente: cli.razon,
       rnc: cli.rnc,

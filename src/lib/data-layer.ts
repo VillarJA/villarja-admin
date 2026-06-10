@@ -122,6 +122,7 @@ function mapFactura(row: Record<string, unknown>): Factura {
     id: String(row.id),
     encf: String(row.encf || ''),
     tipo: Number(row.tipo_ecf ?? row.tipo ?? 31),
+    ambiente: String(row.ambiente || 'certecf'),
     clienteId: String(row.company_id || row.clienteId || ''),
     cliente: String(comp?.razon_social || row.cliente || ''),
     rnc: String(comp?.rnc || row.rnc || ''),
@@ -219,7 +220,7 @@ export async function getFacturasForCliente(companyId: string): Promise<Factura[
       select: '*, companies(razon_social, rnc)',
       eq: { company_id: companyId },
       order: { column: 'created_at', ascending: false },
-      limit: 6,
+      limit: 20,
     });
     return data.map((row) => mapFactura(row));
   } catch {

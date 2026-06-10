@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Icon } from '@/components/Icons';
-import type { Company } from '@/types';
+import { getFacturasForCliente } from '@/lib/data-layer';
+import type { Company, Factura } from '@/types';
 import { AprobacionModal } from '@/components/modals/AprobacionModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -22,12 +23,12 @@ const ECF_TYPES_RI = [
   { tipo: 32, label: 'Factura de Consumo Electrónica (FCE / RFCE)' },
   { tipo: 33, label: 'Nota de Débito' },
   { tipo: 34, label: 'Nota de Crédito' },
-  { tipo: 41, label: 'Registro Único de Ingresos (RUI)' },
-  { tipo: 43, label: 'Régimen Especial — Facturas a Consumidor' },
-  { tipo: 44, label: 'Gubernamental' },
-  { tipo: 45, label: 'Comprobante de Exportaciones' },
-  { tipo: 46, label: 'Comprobante para Gastos Menores' },
-  { tipo: 47, label: 'Regímenes Especiales de Producción' },
+  { tipo: 41, label: 'Compras' },
+  { tipo: 43, label: 'Gastos Menores' },
+  { tipo: 44, label: 'Regímenes Especiales' },
+  { tipo: 45, label: 'Gubernamental' },
+  { tipo: 46, label: 'Exportaciones' },
+  { tipo: 47, label: 'Pagos al Exterior' },
 ];
 
 // ─── Step configuration ───────────────────────────────────────────────────────
@@ -45,15 +46,15 @@ const CERT_STEPS: StepConfig[] = [
   { paso: 1,  titulo: 'Solicitud de certificación',         descripcion: 'Completar el formulario FI-GDF-016 en el portal DGII',                         tipo: 'manual'    },
   { paso: 2,  titulo: 'Set de pruebas DGII',                descripcion: 'Enviar los 25 comprobantes pre-asignados al ambiente certecf',                  tipo: 'automatic' },
   { paso: 3,  titulo: 'Pruebas de aprobación comercial',    descripcion: 'Descargar el set Excel de aprobaciones certecf y enviar XMLs de aprobación/rechazo', tipo: 'hybrid' },
-  { paso: 4,  titulo: 'Pruebas de simulación',              descripcion: 'Emitir comprobantes con datos reales del emisor en certecf',                    tipo: 'automatic' },
-  { paso: 5,  titulo: 'Representación impresa — Tipo 31',   descripcion: 'Subir la representación impresa del Crédito Fiscal al portal DGII',             tipo: 'hybrid'    },
-  { paso: 6,  titulo: 'Representaciones impresas restantes',descripcion: 'Subir representaciones de todos los tipos de comprobante usados',               tipo: 'hybrid'    },
-  { paso: 7,  titulo: 'URLs de servicio — certecf',         descripcion: 'Registrar las 3 URLs del servicio de facturación en el portal DGII',            tipo: 'hybrid'    },
-  { paso: 8,  titulo: 'Prueba de certificado digital',      descripcion: 'Validar que el certificado INDOTEL firma documentos correctamente',             tipo: 'automatic' },
-  { paso: 9,  titulo: 'Recepción de e-CF inbound',          descripcion: 'Confirmar que el receptor procesa comprobantes de otros emisores',              tipo: 'hybrid'    },
-  { paso: 10, titulo: 'Acuse de recibo',                    descripcion: 'Confirmar que el sistema genera acuses de recibo automáticamente',              tipo: 'hybrid'    },
-  { paso: 11, titulo: 'Aprobación comercial inbound',       descripcion: 'Confirmar respuesta a aprobaciones comerciales recibidas',                      tipo: 'hybrid'    },
-  { paso: 12, titulo: 'URLs de servicio — producción',      descripcion: 'Registrar las 3 URLs de producción en el portal DGII',                         tipo: 'hybrid'    },
+  { paso: 4,  titulo: 'Pruebas de simulación',              descripcion: 'Emitir comprobantes con datos reales del emisor en certecf',                    tipo: 'hybrid'    },
+  { paso: 5,  titulo: 'Representaciones impresas al portal DGII', descripcion: 'Descargar los PDFs de los e-CF simulados y cargarlos al portal de certificación', tipo: 'hybrid'    },
+  { paso: 6,  titulo: 'Validación de representaciones por DGII', descripcion: 'Esperar aprobación o corregir y reenviar representaciones impresas rechazadas', tipo: 'hybrid'    },
+  { paso: 7,  titulo: 'URL servicio de prueba',             descripcion: 'Registrar las 4 URLs de servicio del ambiente certecf en el portal DGII',      tipo: 'hybrid'    },
+  { paso: 8,  titulo: 'Inicio prueba recepción e-CF',       descripcion: 'Descargar certificado raíz DGII, validar firma si aplica e indicar que el receptor está listo', tipo: 'hybrid'    },
+  { paso: 9,  titulo: 'Recepción de e-CF',                  descripcion: 'Confirmar que el receptor procesa e-CF enviados por la DGII y responde ARECF', tipo: 'hybrid'    },
+  { paso: 10, titulo: 'Inicio prueba aprobaciones comerciales', descripcion: 'Indicar a la DGII que el receptor está listo para recibir ACECF de prueba', tipo: 'hybrid'    },
+  { paso: 11, titulo: 'Recepción de aprobaciones comerciales', descripcion: 'Confirmar que el endpoint procesa ACECF inbound enviados por la DGII',         tipo: 'hybrid'    },
+  { paso: 12, titulo: 'URLs de servicio — producción',      descripcion: 'Registrar las 4 URLs de producción en el portal DGII',                         tipo: 'hybrid'    },
   { paso: 13, titulo: 'Declaración Jurada',                 descripcion: 'Firmar y enviar la Declaración Jurada al portal DGII',                         tipo: 'manual'    },
   { paso: 14, titulo: 'Verificación tributaria',            descripcion: 'Confirmar que el contribuyente está al día con la DGII',                       tipo: 'manual'    },
   { paso: 15, titulo: 'Activación en producción',           descripcion: 'La DGII activa el ambiente de producción del emisor',                          tipo: 'manual'    },
@@ -361,6 +362,50 @@ function TypeCheckRow({ tipo, label, checked, onToggle, required }: TypeCheckRow
   );
 }
 
+function FacturaEvidenceRow({
+  factura,
+  onDownloadPdf,
+  onDownloadXml,
+}: {
+  factura: Factura;
+  onDownloadPdf: (factura: Factura) => void;
+  onDownloadXml: (factura: Factura) => void;
+}) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'minmax(0, 1fr) auto',
+      gap: '0.75rem',
+      padding: '0.625rem 0.75rem',
+      borderTop: '1px solid var(--border)',
+      alignItems: 'center',
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span className="tag-type">T{factura.tipo}</span>
+          <code style={{ fontSize: '0.75rem', color: 'var(--text)' }}>{factura.encf}</code>
+          <span className={`badge ${factura.estado === 'accepted' ? 'ok' : 'info'}`} style={{ fontSize: '0.65rem' }}>
+            {factura.estado === 'accepted' ? 'Aceptado DGII' : factura.estado}
+          </span>
+        </div>
+        <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          Ambiente {factura.ambiente} · Monto ${factura.total.toFixed(2)}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <button className="btn" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => onDownloadXml(factura)}>
+          <Icon name="download" size={13} style={{ marginRight: 4 }} />
+          XML
+        </button>
+        <button className="btn btn-primary" style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem' }} onClick={() => onDownloadPdf(factura)}>
+          <Icon name="file" size={13} style={{ marginRight: 4 }} />
+          PDF
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function CertificacionTab({ company, onOpenTestSet }: Props) {
@@ -376,8 +421,10 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [showAprobacion, setShowAprobacion] = useState(false);
   const [testFirmaResult, setTestFirmaResult] = useState<TestFirmaResult | null>(null);
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
-  // Per-type checklist for RI upload steps 5 & 6 (visual aid, in-memory only)
+  const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [facturasLoading, setFacturasLoading] = useState(true);
   const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(new Set());
+  const checkedRITypesKey = `villarja_ri_types_${company.rnc}`;
 
   function toggleRIType(tipo: number) {
     setCheckedRITypes((prev) => {
@@ -412,6 +459,42 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   useEffect(() => {
     fetchProgress();
   }, [fetchProgress]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFacturas() {
+      setFacturasLoading(true);
+      try {
+        const data = await getFacturasForCliente(company.id);
+        if (!cancelled) setFacturas(data);
+      } finally {
+        if (!cancelled) setFacturasLoading(false);
+      }
+    }
+
+    loadFacturas();
+    return () => { cancelled = true; };
+  }, [company.id]);
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(checkedRITypesKey);
+      if (!cached) return;
+      const parsed = JSON.parse(cached) as number[];
+      setCheckedRITypes(new Set(parsed.filter((value) => Number.isInteger(value))));
+    } catch {
+      // ignore localStorage parsing failures
+    }
+  }, [checkedRITypesKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(checkedRITypesKey, JSON.stringify(Array.from(checkedRITypes)));
+    } catch {
+      // ignore localStorage write failures
+    }
+  }, [checkedRITypes, checkedRITypesKey]);
 
   // ── Mark / unmark a step ──
   const markStep = async (paso: number, action: 'complete' | 'undo') => {
@@ -476,6 +559,35 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const completedCount = progress.completedSteps.length;
   const totalSteps = CERT_STEPS.length;
   const pct = Math.round((completedCount / totalSteps) * 100);
+  const facturasCertecfAceptadas = facturas.filter((factura) => (
+    factura.encf &&
+    factura.estado === 'accepted' &&
+    factura.ambiente.toLowerCase() === 'certecf'
+  ));
+  const riFacturas = facturasCertecfAceptadas.filter((factura) => ECF_TYPES_RI.some((type) => type.tipo === factura.tipo));
+  const checkedRITypesSorted = Array.from(checkedRITypes).sort((a, b) => a - b);
+  const requiredSimulationTypes = [31, 32];
+  const missingSimulationTypes = requiredSimulationTypes.filter((tipo) => !riFacturas.some((factura) => factura.tipo === tipo));
+  const checkedRILabels = checkedRITypesSorted
+    .map((tipo) => ECF_TYPES_RI.find((candidate) => candidate.tipo === tipo)?.label ?? `Tipo ${tipo}`);
+
+  const downloadEcfFile = async (factura: Factura, type: 'xml' | 'pdf') => {
+    try {
+      const res = await fetch(`/api/ecf/${factura.id}/${type}`, {
+        headers: { 'X-API-Key': apiKey },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = `${factura.encf || factura.id}.${type}`;
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      setMarkError(err instanceof Error ? `Error al descargar ${type.toUpperCase()}: ${err.message}` : `Error al descargar ${type.toUpperCase()}`);
+    }
+  };
 
   const STATUS_DISPLAY: Record<string, { label: string; cls: string }> = {
     no_iniciada: { label: 'Sin iniciar',  cls: 'draft' },
@@ -628,31 +740,66 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Sube al portal DGII la <strong>representación impresa</strong> (PDF) del <strong>Comprobante de Crédito Fiscal (Tipo 31)</strong>. La DGII valida que el PDF incluye todos los campos requeridos antes de aprobar la certificación.
+              Descarga las <strong>representaciones impresas (PDF)</strong> de los e-CF emitidos en el <strong>Paso 4</strong> y súbelas al portal DGII. Este es el paso oficial donde la DGII revisa formato, contenido mínimo, QR y consistencia entre el PDF y el e-CF remitido.
             </p>
             {!isCompleted(4, completed) && !isCompleted(5, completed) && (
               <AlertBox type="warning">
-                <strong>Prerequisito:</strong> Necesitas un e-CF Tipo 31 emitido en certecf (Paso 4) para generar el PDF de muestra.
+                <strong>Prerequisito:</strong> Completa primero el Paso 4. Las representaciones impresas deben salir de comprobantes reales emitidos en <strong>certecf</strong>.
               </AlertBox>
             )}
             <AlertBox type="info">
-              El PDF debe incluir: RNC emisor y comprador, e-NCF, fecha, desglose ITBIS, total, código de seguridad y código QR apuntando al portal certecf DGII.
+              Según DGII, las representaciones impresas deben remitirse en <strong>PDF</strong> y el tamaño máximo permitido por carga es <strong>10 MB</strong>. Deben reflejar los datos del e-CF de simulación: e-NCF, RNCs, fecha, montos, código de seguridad y código QR.
             </AlertBox>
+            {facturasLoading ? (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Cargando comprobantes de simulación…</p>
+            ) : riFacturas.length === 0 ? (
+              <AlertBox type="warning">
+                Aún no aparecen e-CF aceptados en <strong>certecf</strong> para descargar como PDF. Emite primero los comprobantes del Paso 4 y vuelve a esta pantalla.
+              </AlertBox>
+            ) : (
+              <div style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ padding: '0.625rem 0.75rem', background: 'var(--surface-alt, #f9f9f8)', borderBottom: '1px solid var(--border)' }}>
+                  <strong style={{ fontSize: '0.8rem', color: 'var(--text)' }}>PDFs listos desde simulación</strong>
+                  <div style={{ marginTop: '0.2rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Descarga estos archivos y súbelos al portal DGII en la sección de Representaciones Impresas.
+                  </div>
+                </div>
+                {riFacturas.map((factura) => (
+                  <FacturaEvidenceRow
+                    key={factura.id}
+                    factura={factura}
+                    onDownloadXml={(current) => downloadEcfFile(current, 'xml')}
+                    onDownloadPdf={(current) => downloadEcfFile(current, 'pdf')}
+                  />
+                ))}
+              </div>
+            )}
+            {missingSimulationTypes.length > 0 && (
+              <AlertBox type="warning">
+                Todavía faltan comprobantes base del Paso 4 para: <strong>{missingSimulationTypes.map((tipo) => `T${tipo}`).join(', ')}</strong>.
+              </AlertBox>
+            )}
+            <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.5rem', color: 'var(--text)' }}>
+              Checklist por tipo a cargar
+            </h4>
             <div style={{ marginBottom: '0.875rem' }}>
-              <TypeCheckRow
-                tipo={31}
-                label="Comprobante de Crédito Fiscal"
-                checked={checkedRITypes.has(31)}
-                onToggle={() => toggleRIType(31)}
-                required
-              />
+              {ECF_TYPES_RI.map(({ tipo, label }) => (
+                <TypeCheckRow
+                  key={tipo}
+                  tipo={tipo}
+                  label={label}
+                  checked={checkedRITypes.has(tipo)}
+                  onToggle={() => toggleRIType(tipo)}
+                  required={tipo === 31 || tipo === 32}
+                />
+              ))}
             </div>
             <InstructionList items={[
-              'Ve a la pestaña "Facturas" del emisor y filtra por ambiente certecf',
-              'Abre un Comprobante Tipo 31 emitido en el Paso 4 y descarga el PDF',
-              'Abre el portal DGII → sección "Representaciones Impresas" → tipo "Crédito Fiscal"',
-              'Sube el PDF y confirma que la DGII lo acepta sin errores',
-              'Marca el Tipo 31 como completado en el recuadro de arriba antes de continuar',
+              'Descarga el PDF de cada e-CF emitido en certecf que vayas a presentar como evidencia',
+              'Abre el portal DGII → Certificación → Representaciones Impresas',
+              'Selecciona el tipo de comprobante correcto y sube el PDF correspondiente',
+              'Marca en esta lista cada tipo que ya sometiste en DGII para llevar control visual del set cargado',
+              'Cuando termines la carga de todos los tipos aplicables, marca este paso como completado',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
@@ -663,24 +810,25 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Sube representaciones impresas (PDFs) para <strong>todos los tipos de comprobante</strong> que el emisor utilizará. Marca cada tipo a medida que lo subes al portal DGII.
+              En este paso esperas la <strong>respuesta de la DGII</strong> sobre las representaciones impresas cargadas. Si alguna es rechazada, corrígela y vuelve al <strong>Paso 5</strong> para reenviar el PDF correspondiente.
             </p>
-            <div style={{ marginBottom: '0.875rem' }}>
-              {ECF_TYPES_RI.filter((t) => t.tipo !== 31).map(({ tipo, label }) => (
-                <TypeCheckRow
-                  key={tipo}
-                  tipo={tipo}
-                  label={label}
-                  checked={checkedRITypes.has(tipo)}
-                  onToggle={() => toggleRIType(tipo)}
-                />
-              ))}
-            </div>
+            {checkedRITypesSorted.length > 0 ? (
+              <AlertBox type="success">
+                Tipos marcados como cargados en DGII: <strong>{checkedRILabels.join(', ')}</strong>.
+              </AlertBox>
+            ) : (
+              <AlertBox type="warning">
+                Aún no has marcado ningún tipo como cargado en el Paso 5. Si ya subiste PDFs en DGII, regresa y marca los tipos para dejar evidencia visual.
+              </AlertBox>
+            )}
+            <AlertBox type="info">
+              La DGII puede responder <strong>Aprobada</strong> o <strong>Rechazada</strong>. Si rechaza una representación impresa, ajusta el PDF en el sistema, vuelve a descargarlo y remítelo de nuevo desde el portal.
+            </AlertBox>
             <InstructionList items={[
-              'Para cada tipo que el emisor utilizará, descarga el PDF desde la pestaña "Facturas" (ambiente certecf)',
-              'Ve al portal DGII → "Representaciones Impresas" → selecciona el tipo correcto y sube el PDF',
-              'Si el emisor no usará un tipo en particular, no es obligatorio subirlo',
-              'Confirma que la DGII acepta todos los tipos antes de continuar al Paso 7',
+              'Revisa en el portal DGII el resultado de cada representación impresa cargada en el Paso 5',
+              'Si un PDF fue rechazado, corrige el documento fuente, descarga nuevamente el PDF y súbelo otra vez',
+              'No avances al Paso 7 hasta que la DGII confirme que las representaciones impresas están aprobadas',
+              'Marca este paso cuando el set de representaciones esté aceptado por la DGII',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
@@ -714,13 +862,22 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Verifica que el <strong>certificado digital INDOTEL</strong> del emisor está cargado correctamente y puede firmar documentos XML. Esta prueba firma un XML de muestra con el certificado registrado.
+              La DGII habilita el inicio de las <strong>pruebas de comunicación</strong>. Aquí debes preparar la recepción del emisor: descargar el <strong>certificado raíz DGII</strong>, dejar listas las URLs del paso 7 e indicar en el portal que el receptor está listo para recibir e-CF de prueba.
             </p>
+            <AlertBox type="info">
+              La validación interna de firma que ves abajo es una ayuda técnica de Villar JA. Sirve para comprobar el certificado del emisor, pero el paso oficial de DGII también incluye la preparación del receptor y el certificado raíz.
+            </AlertBox>
             {!company.cert && (
               <AlertBox type="error">
                 No hay certificado digital cargado para este emisor. Carga el certificado .p12 desde el botón "Certificado Digital" antes de continuar.
               </AlertBox>
             )}
+            <InstructionList items={[
+              'Descarga el certificado raíz DGII desde el portal certecf si la prueba de comunicación lo solicita',
+              'Verifica que las URLs del Paso 7 siguen registradas correctamente',
+              'Confirma en el portal DGII que el receptor está listo para recibir e-CF de prueba',
+              'Usa la prueba de firma de abajo como validación técnica adicional antes de marcar el paso',
+            ]} />
             <button
               className="btn btn-primary"
               onClick={runTestFirma}
@@ -786,16 +943,16 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Al recibir cada e-CF inbound (Paso 9), el sistema genera y envía automáticamente un <strong>Acuse de Recibo (ARECF)</strong> firmado digitalmente al certecf DGII.
+              Una vez superado el Paso 9, debes <strong>indicar a la DGII</strong> que el receptor está listo para la prueba de <strong>Aprobaciones Comerciales (ACECF)</strong>. Desde ese momento la DGII podrá empezar a enviar ACECF de prueba al endpoint registrado.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> Los ARECF se generan con el certificado del emisor y se envían al certecf en tiempo real, sin intervención manual.
+              <strong>Automático:</strong> Cuando la DGII inicie esta prueba, Villar JA procesará las ACECF inbound en el receptor centralizado y podrás verificarlas luego en el Paso 11.
             </AlertBox>
             <InstructionList items={[
-              'Confirma con la DGII que recibieron los ARECF correspondientes a los e-CF del Paso 9',
-              'Los acuses están firmados con el certificado INDOTEL del emisor registrado en el sistema',
-              'Si la DGII reporta que no recibió acuses, verifica que el certificado del emisor esté activo y vigente (ver Paso 8)',
-              'Marca este paso cuando la DGII confirme que los acuses fueron recibidos correctamente',
+              'En el portal DGII, selecciona la opción para iniciar la prueba de aprobaciones comerciales',
+              'Confirma que las URLs del Paso 7 no hayan cambiado y que el certificado del emisor siga vigente',
+              'Coordina con la DGII el momento de envío de las ACECF de prueba',
+              'Marca este paso cuando la DGII confirme que la prueba fue iniciada',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>

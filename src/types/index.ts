@@ -28,6 +28,7 @@ export interface Factura {
   id: string;
   encf: string;
   tipo: number;
+  ambiente: string;
   clienteId: string;
   cliente: string;
   rnc: string;
