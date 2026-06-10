@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Icon } from '@/components/Icons';
 import type { Company } from '@/types';
 import * as XLSX from 'xlsx';
@@ -25,6 +25,7 @@ type ViewStep = 'upload' | 'cases';
 interface Props {
   company: Company;
   onClose: () => void;
+  onAllSent?: () => void;
 }
 
 // ─── Excel parser ──────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ function parseAprobacionExcel(file: File, fallbackRncComprador: string): Promise
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AprobacionModal({ company, onClose }: Props) {
+export function AprobacionModal({ company, onClose, onAllSent }: Props) {
   const [viewStep, setViewStep] = useState<ViewStep>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [cases, setCases] = useState<AprobacionCase[]>([]);
@@ -103,6 +104,41 @@ export function AprobacionModal({ company, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const apiKey = company.apiKey ?? '';
+  const PASO3_KEY = `villarja_paso3_${company.rnc}`;
+
+  // Load cached cases from localStorage on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(PASO3_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as AprobacionCase[];
+        if (parsed.length > 0) {
+          setCases(parsed);
+          setViewStep('cases');
+        }
+      }
+    } catch {
+      // ignore — localStorage may be unavailable
+    }
+  }, [PASO3_KEY]);
+
+  // Persist cases to localStorage whenever they change
+  useEffect(() => {
+    if (cases.length > 0) {
+      try {
+        localStorage.setItem(PASO3_KEY, JSON.stringify(cases));
+      } catch {
+        // ignore
+      }
+    }
+  }, [cases, PASO3_KEY]);
+
+  // Notify parent when all cases are sent successfully
+  useEffect(() => {
+    if (cases.length > 0 && cases.every((c) => c.result === 'ok')) {
+      onAllSent?.();
+    }
+  }, [cases, onAllSent]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -356,6 +392,29 @@ export function AprobacionModal({ company, onClose }: Props) {
           {viewStep === 'cases' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
+              {/* All-done banner */}
+              {cases.length > 0 && cases.every((c) => c.result === 'ok') && (
+                <div style={{
+                  background: 'var(--success-bg, #f0fdf4)',
+                  border: '1px solid var(--success-bd, #bbf7d0)',
+                  borderRadius: 8,
+                  padding: '0.875rem 1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.625rem',
+                  fontSize: '0.8375rem',
+                  color: 'var(--success, #15803d)',
+                }}>
+                  <Icon name="checkcircle" size={18} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>
+                    <strong>Todos los casos enviados.</strong> El Paso 3 se marcará como completado automáticamente.
+                  </span>
+                  <button className="btn" style={{ fontSize: '0.8125rem', flexShrink: 0 }} onClick={onClose}>
+                    Cerrar
+                  </button>
+                </div>
+              )}
+
               {/* Summary + action bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap' }}>
                 {okCount > 0 && <span className="badge ok" style={{ fontSize: '0.7rem' }}>Enviados: {okCount}</span>}
@@ -364,7 +423,13 @@ export function AprobacionModal({ company, onClose }: Props) {
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <button
                     className="btn"
-                    onClick={() => { setViewStep('upload'); setFile(null); setError(''); }}
+                    onClick={() => {
+                      setCases([]);
+                      try { localStorage.removeItem(PASO3_KEY); } catch { /* ignore */ }
+                      setViewStep('upload');
+                      setFile(null);
+                      setError('');
+                    }}
                     style={{ fontSize: '0.8125rem' }}
                   >
                     <Icon name="upload" size={14} style={{ marginRight: '0.35rem' }} />

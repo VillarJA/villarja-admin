@@ -11,9 +11,24 @@ const ECF_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
 const SERVICE_URLS = {
   autenticacion: `${ECF_BASE}/fe/autenticacion/api/semilla`,
-  recepcion: `${ECF_BASE}/fe/recepcion/api/ecf`,
-  aprobacion: `${ECF_BASE}/fe/aprobacioncomercial/api/ecf`,
+  token:         `${ECF_BASE}/fe/autenticacion/api/token`,
+  recepcion:     `${ECF_BASE}/fe/recepcion/api/ecf`,
+  aprobacion:    `${ECF_BASE}/fe/aprobacioncomercial/api/ecf`,
 };
+
+// All e-CF types with labels (used in steps 4, 5, 6)
+const ECF_TYPES_RI = [
+  { tipo: 31, label: 'Comprobante de Crédito Fiscal' },
+  { tipo: 32, label: 'Factura de Consumo Electrónica (FCE / RFCE)' },
+  { tipo: 33, label: 'Nota de Débito' },
+  { tipo: 34, label: 'Nota de Crédito' },
+  { tipo: 41, label: 'Registro Único de Ingresos (RUI)' },
+  { tipo: 43, label: 'Régimen Especial — Facturas a Consumidor' },
+  { tipo: 44, label: 'Gubernamental' },
+  { tipo: 45, label: 'Comprobante de Exportaciones' },
+  { tipo: 46, label: 'Comprobante para Gastos Menores' },
+  { tipo: 47, label: 'Regímenes Especiales de Producción' },
+];
 
 // ─── Step configuration ───────────────────────────────────────────────────────
 
@@ -282,6 +297,70 @@ function ConfirmButton({ paso, completed, onMark, loading }: ConfirmButtonProps)
   );
 }
 
+interface TypeCheckRowProps {
+  tipo: number;
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+  required?: boolean;
+}
+
+function TypeCheckRow({ tipo, label, checked, onToggle, required }: TypeCheckRowProps) {
+  return (
+    <div
+      role="checkbox"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggle()}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.625rem',
+        padding: '0.4rem 0.625rem',
+        borderRadius: 6,
+        border: `1px solid ${checked ? 'var(--success-bd, #bbf7d0)' : 'var(--border)'}`,
+        background: checked ? 'var(--success-bg, #f0fdf4)' : 'transparent',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'border-color 0.12s ease, background 0.12s ease',
+        marginBottom: '0.375rem',
+      }}
+    >
+      <span style={{
+        width: 18,
+        height: 18,
+        borderRadius: 4,
+        flexShrink: 0,
+        border: `1.5px solid ${checked ? 'var(--success, #16a34a)' : 'var(--border)'}`,
+        background: checked ? 'var(--success, #16a34a)' : 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.12s ease',
+      }}>
+        {checked && <Icon name="check" size={11} style={{ color: '#fff' }} />}
+      </span>
+      <span style={{
+        fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+        fontSize: '0.7rem',
+        color: 'var(--text-muted)',
+        minWidth: 24,
+      }}>
+        T{tipo}
+      </span>
+      <span style={{ fontSize: '0.8125rem', color: 'var(--text)', flex: 1 }}>
+        {label}
+      </span>
+      {required && (
+        <span className="badge err" style={{ fontSize: '0.65rem', flexShrink: 0 }}>
+          Requerido
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function CertificacionTab({ company, onOpenTestSet }: Props) {
@@ -297,6 +376,16 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [showAprobacion, setShowAprobacion] = useState(false);
   const [testFirmaResult, setTestFirmaResult] = useState<TestFirmaResult | null>(null);
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
+  // Per-type checklist for RI upload steps 5 & 6 (visual aid, in-memory only)
+  const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(new Set());
+
+  function toggleRIType(tipo: number) {
+    setCheckedRITypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(tipo)) { next.delete(tipo); } else { next.add(tipo); }
+      return next;
+    });
+  }
 
   const apiKey = company.apiKey ?? '';
 
@@ -455,29 +544,23 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII proporciona un <strong>segundo set de pruebas Excel</strong> exclusivo para aprobaciones comerciales. Descarga el Excel desde el portal DGII certecf, impórtalo aquí y envía cada respuesta firmada con el certificado del emisor.
+              La DGII proporciona un archivo Excel con los casos para <strong>pruebas de aprobación comercial (ACECF)</strong>. Descárgalo del portal certecf, impórtalo aquí y envía cada XML de respuesta firmado al certecf.
             </p>
             <AlertBox type="info">
-              <strong>Acción requerida:</strong> El sistema construye y firma cada XML de aprobación/rechazo automáticamente. Solo necesitas importar el Excel y confirmar la respuesta por fila.
+              <strong>Proceso automático:</strong> El sistema construye y firma cada XML de ACECF con el certificado del emisor. Solo debes importar el Excel, revisar la respuesta por fila (Aprobar / Rechazar) y enviar. El paso se marcará completado automáticamente cuando todos los casos sean aceptados.
             </AlertBox>
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowAprobacion(true)}
-              disabled={blocked}
-              style={{
-                fontSize: '0.875rem',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <Icon name="checkcircle" size={16} />
-              Gestionar Aprobaciones
-            </button>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-              Importa el Excel de aprobaciones de la DGII, ajusta Aprobar/Rechazar por cada fila y envía al certecf. Marca este paso cuando todos los casos estén aceptados.
-            </p>
-            <DGIIPortalLink />
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowAprobacion(true)}
+                disabled={blocked}
+                style={{ fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Icon name="checkcircle" size={16} />
+                Gestionar Aprobaciones Comerciales
+              </button>
+              <DGIIPortalLink />
+            </div>
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
@@ -486,14 +569,56 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Emite comprobantes de prueba con <strong>datos reales del emisor</strong> (no del set DGII) usando el ambiente <strong>certecf</strong>. Esto valida el flujo completo de creación, firma y envío con las secuencias propias.
+              Emite comprobantes con <strong>datos reales del emisor</strong> en certecf usando las secuencias propias del cliente. Esto valida el flujo completo: generación, firma y envío con el certificado INDOTEL del emisor.
             </p>
+            {!isCompleted(3, completed) && !isCompleted(4, completed) && (
+              <AlertBox type="warning">
+                <strong>Prerequisito:</strong> Completa el Paso 3 — Pruebas de Aprobación Comercial antes de continuar con la simulación.
+              </AlertBox>
+            )}
+            <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.375rem', color: 'var(--text)' }}>
+              Comprobantes a emitir en certecf
+            </h4>
+            <div style={{ marginBottom: '0.875rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              {[
+                { tipo: 31, label: 'Comprobante de Crédito Fiscal', required: true },
+                { tipo: 32, label: 'Factura de Consumo Electrónica (≥ RD$250K) / RFCE (< RD$250K)', required: true },
+                { tipo: 33, label: 'Nota de Débito', required: false },
+                { tipo: 34, label: 'Nota de Crédito', required: false },
+                { tipo: 41, label: 'Registro Único de Ingresos', required: false },
+                { tipo: 43, label: 'Régimen Especial', required: false },
+                { tipo: 44, label: 'Gubernamental', required: false },
+                { tipo: 45, label: 'Exportaciones', required: false },
+                { tipo: 46, label: 'Gastos Menores', required: false },
+                { tipo: 47, label: 'Regímenes Especiales de Producción', required: false },
+              ].map(({ tipo, label, required }, i, arr) => (
+                <div key={tipo} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.375rem 0.75rem', fontSize: '0.8125rem',
+                  borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                  background: 'transparent',
+                }}>
+                  <span style={{
+                    fontFamily: 'var(--font-mono, monospace)', fontSize: '0.7rem',
+                    color: 'var(--text-muted)', minWidth: 24,
+                  }}>
+                    T{tipo}
+                  </span>
+                  <span style={{ flex: 1, color: 'var(--text)' }}>{label}</span>
+                  {required ? (
+                    <span className="badge err" style={{ fontSize: '0.65rem' }}>Requerido</span>
+                  ) : (
+                    <span className="badge draft" style={{ fontSize: '0.65rem' }}>Si aplica</span>
+                  )}
+                </div>
+              ))}
+            </div>
             <InstructionList items={[
-              'Confirma que el emisor tiene secuencias creadas para el ambiente certecf en la pestaña "Secuencias"',
-              'Ve al módulo de facturas y crea al menos un comprobante de cada tipo que el emisor utilizará',
-              'Envía los comprobantes seleccionando el ambiente certecf',
-              'Verifica que la DGII devuelve estado "aceptada" para cada comprobante',
-              'Realiza al menos una prueba con Crédito Fiscal (Tipo 31) y una con Consumo (Tipo 32)',
+              'Confirma que el emisor tiene secuencias activas para certecf (pestaña "Secuencias")',
+              'Ve al módulo de Facturas del cliente y crea al menos un Crédito Fiscal (T31)',
+              'Crea también una Factura de Consumo (T32) — ambos tipos son requeridos por la DGII',
+              'Si el emisor usará otros tipos, emite al menos uno de cada tipo marcado como "Si aplica"',
+              'Verifica que cada comprobante devuelva estado "aceptada" en certecf antes de continuar',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -503,16 +628,31 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Sube al portal DGII la <strong>representación impresa</strong> (diseño PDF) del <strong>Comprobante de Crédito Fiscal (Tipo 31)</strong>. Este es el formato visual que se entrega al comprador.
+              Sube al portal DGII la <strong>representación impresa</strong> (PDF) del <strong>Comprobante de Crédito Fiscal (Tipo 31)</strong>. La DGII valida que el PDF incluye todos los campos requeridos antes de aprobar la certificación.
             </p>
+            {!isCompleted(4, completed) && !isCompleted(5, completed) && (
+              <AlertBox type="warning">
+                <strong>Prerequisito:</strong> Necesitas un e-CF Tipo 31 emitido en certecf (Paso 4) para generar el PDF de muestra.
+              </AlertBox>
+            )}
             <AlertBox type="info">
-              El PDF debe incluir todos los campos requeridos: RNC emisor y comprador, NCF, fecha, desglose de ITBIS, importe total, código QR y firma digital.
+              El PDF debe incluir: RNC emisor y comprador, e-NCF, fecha, desglose ITBIS, total, código de seguridad y código QR apuntando al portal certecf DGII.
             </AlertBox>
+            <div style={{ marginBottom: '0.875rem' }}>
+              <TypeCheckRow
+                tipo={31}
+                label="Comprobante de Crédito Fiscal"
+                checked={checkedRITypes.has(31)}
+                onToggle={() => toggleRIType(31)}
+                required
+              />
+            </div>
             <InstructionList items={[
-              'Genera un PDF de muestra de un Crédito Fiscal (Tipo 31) desde el módulo de facturas',
-              'Verifica que el PDF contiene todos los campos requeridos por la DGII',
-              'Ve al portal DGII → sección "Representaciones Impresas"',
-              'Sube el PDF del Tipo 31 y confirma que la DGII lo acepta',
+              'Ve a la pestaña "Facturas" del emisor y filtra por ambiente certecf',
+              'Abre un Comprobante Tipo 31 emitido en el Paso 4 y descarga el PDF',
+              'Abre el portal DGII → sección "Representaciones Impresas" → tipo "Crédito Fiscal"',
+              'Sube el PDF y confirma que la DGII lo acepta sin errores',
+              'Marca el Tipo 31 como completado en el recuadro de arriba antes de continuar',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
@@ -523,13 +663,24 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Sube representaciones impresas para <strong>todos los tipos de comprobante</strong> que el emisor utilizará. La DGII valida el formato de cada tipo antes de aprobar la certificación.
+              Sube representaciones impresas (PDFs) para <strong>todos los tipos de comprobante</strong> que el emisor utilizará. Marca cada tipo a medida que lo subes al portal DGII.
             </p>
+            <div style={{ marginBottom: '0.875rem' }}>
+              {ECF_TYPES_RI.filter((t) => t.tipo !== 31).map(({ tipo, label }) => (
+                <TypeCheckRow
+                  key={tipo}
+                  tipo={tipo}
+                  label={label}
+                  checked={checkedRITypes.has(tipo)}
+                  onToggle={() => toggleRIType(tipo)}
+                />
+              ))}
+            </div>
             <InstructionList items={[
-              'Identifica todos los tipos de comprobante que el emisor emitirá (32, 33, 34, 41, 43, 44, 45, 46, 47)',
-              'Genera un PDF de muestra por cada tipo adicional desde el módulo de facturas',
-              'Sube cada representación en el portal DGII → "Representaciones Impresas"',
-              'Confirma que la DGII marca todos los tipos como aprobados antes de continuar',
+              'Para cada tipo que el emisor utilizará, descarga el PDF desde la pestaña "Facturas" (ambiente certecf)',
+              'Ve al portal DGII → "Representaciones Impresas" → selecciona el tipo correcto y sube el PDF',
+              'Si el emisor no usará un tipo en particular, no es obligatorio subirlo',
+              'Confirma que la DGII acepta todos los tipos antes de continuar al Paso 7',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
@@ -540,17 +691,18 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Registra estas URLs en el portal DGII como las URLs del servicio de facturación del emisor en el ambiente <strong>certecf</strong>. Nuestro receptor centralizado atiende a todos los emisores.
+              Registra estas <strong>4 URLs</strong> en el portal DGII como las URLs del servicio de facturación del emisor en el ambiente <strong>certecf</strong>. Nuestro receptor centralizado atiende a todos los emisores.
             </p>
             <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.625rem', color: 'var(--text)' }}>
-              URLs a registrar en el portal DGII
+              URLs a registrar en el portal DGII (certecf)
             </h4>
-            <URLCard label="URL Autenticación" url={SERVICE_URLS.autenticacion} />
-            <URLCard label="URL Recepción de e-CF" url={SERVICE_URLS.recepcion} />
-            <URLCard label="URL Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
+            <URLCard label="Autenticación — Semilla" url={SERVICE_URLS.autenticacion} />
+            <URLCard label="Autenticación — Token" url={SERVICE_URLS.token} />
+            <URLCard label="Recepción de e-CF" url={SERVICE_URLS.recepcion} />
+            <URLCard label="Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
             <InstructionList items={[
-              'Ve al portal DGII → "Configuración de URLs de Servicio" (certecf)',
-              'Ingresa las 3 URLs mostradas arriba en sus campos correspondientes',
+              'Ve al portal DGII → "Configuración de URLs de Servicio" en el ambiente certecf',
+              'Ingresa las 4 URLs mostradas arriba en sus campos correspondientes',
               'Guarda los cambios y confirma que la DGII las acepta sin errores',
             ]} />
             <DGIIPortalLink />
@@ -614,16 +766,17 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII enviará comprobantes electrónicos de prueba al receptor del emisor en certecf. Nuestro receptor los procesa automáticamente y los registra en la pestaña <strong>Recepciones</strong>.
+              La DGII envía e-CF de prueba al endpoint de recepción del emisor para verificar que el servicio funciona correctamente. Nuestro receptor valida la firma DGII, registra cada e-CF y genera un <strong>Acuse de Recibo (ARECF)</strong> automáticamente.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> El receptor en ecf.villarja.com procesa todos los e-CF inbound firmados por el certecf. Verifica en la pestaña "Recepciones" que hayan llegado comprobantes.
+              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa todos los e-CF inbound del certecf y responde con el ARECF firmado con el certificado del emisor.
             </AlertBox>
-            <URLCard label="URL Recepción activa" url={SERVICE_URLS.recepcion} />
+            <URLCard label="URL Recepción activa (certecf)" url={SERVICE_URLS.recepcion} />
             <InstructionList items={[
-              'Confirma con la DGII que han enviado los comprobantes de prueba a la URL de Recepción',
-              'Verifica en la pestaña "Recepciones" del emisor que los e-CF aparecen como recibidos',
-              'Si no hay recepciones en 24 h, confirma que la URL del Paso 7 esté correctamente registrada',
+              'Confirma con la DGII que han enviado los e-CF de prueba a la URL de Recepción registrada en el Paso 7',
+              'Ve a la pestaña "Recepciones" del emisor y verifica que aparecen los comprobantes inbound del certecf',
+              'Si no hay recepciones en 24 h, revisa que la URL del Paso 7 esté correctamente guardada en el portal DGII',
+              'Una vez confirmado que la DGII envió y el sistema recibió, marca este paso como completado',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -633,15 +786,16 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Al recibir un e-CF inbound (Paso 9), el sistema debe generar y enviar un <strong>acuse de recibo</strong> firmado digitalmente. Nuestro receptor genera y envía acuses automáticamente.
+              Al recibir cada e-CF inbound (Paso 9), el sistema genera y envía automáticamente un <strong>Acuse de Recibo (ARECF)</strong> firmado digitalmente al certecf DGII.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> Los acuses de recibo se generan con el certificado del emisor y se envían a la DGII inmediatamente al procesar cada e-CF inbound.
+              <strong>Automático:</strong> Los ARECF se generan con el certificado del emisor y se envían al certecf en tiempo real, sin intervención manual.
             </AlertBox>
             <InstructionList items={[
-              'Confirma con la DGII que recibieron los acuses de recibo de los comprobantes enviados en el Paso 9',
-              'Los acuses están firmados con el certificado del emisor y enviados al certecf automáticamente',
-              'Si la DGII reporta que no recibió acuses, verifica que el certificado del emisor esté activo',
+              'Confirma con la DGII que recibieron los ARECF correspondientes a los e-CF del Paso 9',
+              'Los acuses están firmados con el certificado INDOTEL del emisor registrado en el sistema',
+              'Si la DGII reporta que no recibió acuses, verifica que el certificado del emisor esté activo y vigente (ver Paso 8)',
+              'Marca este paso cuando la DGII confirme que los acuses fueron recibidos correctamente',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -651,14 +805,17 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII verifica que el emisor responde correctamente a <strong>aprobaciones comerciales inbound</strong>. Nuestro receptor las procesa automáticamente.
+              La DGII envía <strong>Aprobaciones Comerciales (ACECF)</strong> de prueba al endpoint de aprobaciones del emisor para verificar que el servicio procesa correctamente las respuestas inbound.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> Las aprobaciones y rechazos inbound se procesan por el receptor en tiempo real. Las recepciones de tipo "aprobacion" aparecen en la pestaña Recepciones.
+              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa las ACECF inbound en tiempo real. Las entradas de tipo "aprobación" aparecen en la pestaña Recepciones.
             </AlertBox>
+            <URLCard label="URL Aprobación Comercial activa (certecf)" url={SERVICE_URLS.aprobacion} />
             <InstructionList items={[
-              'Verifica en la pestaña "Recepciones" del emisor que hay entradas de tipo "aprobacion" del certecf',
-              'Confirma con la DGII que el flujo de aprobación comercial fue procesado correctamente',
+              'Ve a la pestaña "Recepciones" del emisor y verifica que hay entradas de tipo "aprobación" del certecf',
+              'Confirma con la DGII que el flujo de ACECF inbound fue procesado correctamente',
+              'Si no hay recepciones ACECF, revisa que la URL de Aprobación Comercial del Paso 7 esté correctamente registrada',
+              'Marca este paso cuando la DGII confirme el flujo de aprobaciones comerciales inbound',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -668,18 +825,20 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Registra las URLs de <strong>producción</strong> en el portal DGII. Son las mismas URLs del Paso 7 ya que nuestro receptor centralizado atiende tanto certecf como el ambiente de producción.
+              Registra las <strong>4 URLs de producción</strong> en el portal DGII. Son las mismas URLs del Paso 7 — nuestro receptor centralizado atiende tanto certecf como el ambiente de producción.
             </p>
             <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.625rem', color: 'var(--text)' }}>
               URLs de producción a registrar
             </h4>
-            <URLCard label="URL Autenticación" url={SERVICE_URLS.autenticacion} />
-            <URLCard label="URL Recepción de e-CF" url={SERVICE_URLS.recepcion} />
-            <URLCard label="URL Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
+            <URLCard label="Autenticación — Semilla" url={SERVICE_URLS.autenticacion} />
+            <URLCard label="Autenticación — Token" url={SERVICE_URLS.token} />
+            <URLCard label="Recepción de e-CF" url={SERVICE_URLS.recepcion} />
+            <URLCard label="Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
             <InstructionList items={[
               'Ve al portal DGII → sección de configuración de producción ("URLs de Servicio — ecf")',
-              'Ingresa las 3 URLs mostradas arriba en sus campos de producción',
+              'Ingresa las 4 URLs mostradas arriba en sus campos de producción',
               'Guarda y confirma que la DGII las acepta sin errores',
+              'Las URLs son las mismas que certecf — el receptor atiende ambos ambientes simultáneamente',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
@@ -903,6 +1062,11 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         <AprobacionModal
           company={company}
           onClose={() => setShowAprobacion(false)}
+          onAllSent={() => {
+            if (!progress.completedSteps.includes(3)) {
+              markStep(3, 'complete');
+            }
+          }}
         />
       )}
 
