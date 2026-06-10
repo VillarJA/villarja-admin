@@ -13,7 +13,23 @@ export async function POST(req: NextRequest) {
       headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const responseBody = await upstream.json().catch(() => ({}));
+    const responseText = await upstream.text();
+    let responseBody: Record<string, unknown> = {};
+
+    if (responseText) {
+      try {
+        responseBody = JSON.parse(responseText) as Record<string, unknown>;
+      } catch {
+        responseBody = upstream.ok
+          ? { message: responseText }
+          : { error: responseText };
+      }
+    }
+
+    if (!upstream.ok && !responseBody.error) {
+      responseBody.error = `HTTP ${upstream.status}`;
+    }
+
     return NextResponse.json(responseBody, { status: upstream.status });
   } catch (err) {
     return NextResponse.json(

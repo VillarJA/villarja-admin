@@ -378,7 +378,9 @@ export function CertificacionModal({ company, onClose }: Props) {
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 60,
-        background: 'var(--overlay)',
+        background: 'rgba(16, 24, 40, 0.28)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '1rem',
       }}

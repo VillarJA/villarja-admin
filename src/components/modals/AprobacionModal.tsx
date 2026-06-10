@@ -12,6 +12,7 @@ interface AprobacionCase {
   rncEmisor: string;
   eNCF: string;
   fechaEmision: string;
+  fechaHoraAprobacionComercial: string;
   montoTotal: number;
   rncComprador: string;
   estado: 1 | 2;
@@ -48,6 +49,18 @@ function pick(row: Record<string, unknown>, ...aliases: string[]): string {
   return '';
 }
 
+function extractApiError(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback;
+
+  const error = 'error' in payload ? payload.error : undefined;
+  if (typeof error === 'string' && error.trim()) return error;
+
+  const message = 'message' in payload ? payload.message : undefined;
+  if (typeof message === 'string' && message.trim()) return message;
+
+  return fallback;
+}
+
 function normalizeEstadoAcecf(value: unknown): 1 | 2 {
   const raw = String(value ?? '').trim().toLowerCase();
   if (raw === '0' || raw === '2' || raw === 'rechazado' || raw === 'rechazo') return 2;
@@ -78,6 +91,15 @@ function parseAprobacionExcel(file: File, fallbackRncComprador: string): Promise
               rncEmisor: pick(row, 'rnc emisor', 'rncemisor', 'emisor', 'rnc_emisor', 'rnc emisor prueba'),
               eNCF: pick(row, 'encf', 'e-ncf', 'ncf', 'numero comprobante', 'e ncf', 'encf prueba'),
               fechaEmision: pick(row, 'fecha emision', 'fechaemision', 'fecha', 'fecha_emision', 'fecha emision'),
+              fechaHoraAprobacionComercial: pick(
+                row,
+                'fecha hora aprobacion comercial',
+                'fechahoraaprobacioncomercial',
+                'fecha/hora aprobacion comercial',
+                'fecha y hora aprobacion comercial',
+                'fecha_hora_aprobacion_comercial',
+                'fecha hora',
+              ),
               montoTotal: parseFloat(pick(row, 'monto total', 'montototal', 'monto', 'total', 'monto_total') || '0') || 0,
               rncComprador,
               estado,
@@ -106,6 +128,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
   const [runningAll, setRunningAll] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [expandedErrorId, setExpandedErrorId] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const apiKey = company.apiKey ?? '';
@@ -119,6 +142,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
         const parsed = (JSON.parse(cached) as AprobacionCase[]).map((item) => ({
           ...item,
           estado: normalizeEstadoAcecf(item.estado),
+          fechaHoraAprobacionComercial: String(item.fechaHoraAprobacionComercial ?? ''),
         }));
         if (parsed.length > 0) {
           setCases(parsed);
@@ -191,6 +215,15 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
   async function sendCase(c: AprobacionCase): Promise<boolean> {
     setRunningId(c.id);
     setError('');
+    setExpandedErrorId(null);
+    if (!c.fechaHoraAprobacionComercial) {
+      const msg = 'El Excel DGII no contiene FechaHoraAprobacionComercial para este caso. Vuelve a cargar el archivo original del portal.';
+      setCases((prev) => prev.map((x) => (x.id === c.id ? { ...x, result: 'error', errorMsg: msg } : x)));
+      setError(`Error en ${c.eNCF || `caso ${c.id + 1}`}: ${msg}`);
+      setExpandedErrorId(c.id);
+      setRunningId(null);
+      return false;
+    }
     try {
       const res = await fetch('/api/certification/aprobacion', {
         method: 'POST',
@@ -199,6 +232,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
           rncEmisor: c.rncEmisor,
           eNCF: c.eNCF,
           fechaEmision: c.fechaEmision,
+          fechaHoraAprobacionComercial: c.fechaHoraAprobacionComercial,
           montoTotal: c.montoTotal,
           rncComprador: c.rncComprador,
           estado: c.estado,
@@ -207,9 +241,10 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = (json as { error?: string }).error ?? `HTTP ${res.status}`;
+        const msg = extractApiError(json, `HTTP ${res.status}`);
         setCases((prev) => prev.map((x) => (x.id === c.id ? { ...x, result: 'error', errorMsg: msg } : x)));
         setError(`Error en ${c.eNCF || `caso ${c.id + 1}`}: ${msg}`);
+        setExpandedErrorId(c.id);
         return false;
       }
       setCases((prev) => prev.map((x) => (x.id === c.id ? { ...x, result: 'ok', errorMsg: undefined } : x)));
@@ -218,6 +253,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
       const msg = err instanceof Error ? err.message : 'Error de red';
       setCases((prev) => prev.map((x) => (x.id === c.id ? { ...x, result: 'error', errorMsg: msg } : x)));
       setError(`Error en ${c.eNCF || `caso ${c.id + 1}`}: ${msg}`);
+      setExpandedErrorId(c.id);
       return false;
     } finally {
       setRunningId(null);
@@ -249,14 +285,17 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
   const pendingCount = cases.filter((c) => c.result === 'pending').length;
   const okCount = cases.filter((c) => c.result === 'ok').length;
   const errCount = cases.filter((c) => c.result === 'error').length;
+  const expandedCase = expandedErrorId !== null ? cases.find((c) => c.id === expandedErrorId) : null;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 60,
-        background: 'var(--overlay)',
+        position: 'fixed', inset: 0, zIndex: 999,
+        background: 'rgba(16, 24, 40, 0.32)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '1rem',
       }}
@@ -270,6 +309,7 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
         style={{
           width: '100%', maxWidth: 860, maxHeight: '92vh',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          boxShadow: '0 32px 90px rgba(15, 23, 42, 0.28)',
         }}
       >
         {/* Header */}
@@ -310,8 +350,48 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
             background: 'var(--danger-bg, #fef2f2)', color: 'var(--danger, #dc2626)',
             padding: '0.625rem 1.5rem', fontSize: '0.8125rem', flexShrink: 0,
             borderBottom: '1px solid var(--border)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
           }}>
             {error}
+          </div>
+        )}
+
+        {expandedCase?.errorMsg && (
+          <div style={{
+            background: 'var(--danger-bg, #fef2f2)',
+            borderBottom: '1px solid var(--danger-bd, #fecaca)',
+            padding: '0.75rem 1.5rem',
+            flexShrink: 0,
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '0.5rem',
+            }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--danger, #dc2626)' }}>
+                Respuesta DGII — {expandedCase.eNCF}
+              </span>
+              <button
+                className="btn"
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                onClick={() => setExpandedErrorId(null)}
+              >
+                <Icon name="x" size={12} /> Cerrar
+              </button>
+            </div>
+            <pre style={{
+              margin: 0,
+              fontSize: '0.7rem',
+              color: 'var(--danger, #dc2626)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.55,
+              maxHeight: 180,
+              overflowY: 'auto',
+              fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+            }}>
+              {expandedCase.errorMsg}
+            </pre>
           </div>
         )}
 
@@ -564,13 +644,23 @@ export function AprobacionModal({ company, onClose, onAllSent }: Props) {
                               <span className="badge ok" style={{ fontSize: '0.7rem' }}>Aceptado</span>
                             )}
                             {c.result === 'error' && (
-                              <span
-                                className="badge err"
-                                style={{ fontSize: '0.7rem', cursor: 'help' }}
-                                title={c.errorMsg}
-                              >
-                                Error
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                <span
+                                  className="badge err"
+                                  style={{ fontSize: '0.7rem', cursor: 'pointer' }}
+                                  title={c.errorMsg}
+                                  onClick={() => setExpandedErrorId(c.id)}
+                                >
+                                  Error
+                                </span>
+                                <button
+                                  className="btn"
+                                  style={{ fontSize: '0.68rem', padding: '0.18rem 0.45rem' }}
+                                  onClick={() => setExpandedErrorId(c.id)}
+                                >
+                                  Ver detalle
+                                </button>
+                              </div>
                             )}
                             {c.result === 'pending' && (
                               <span className="badge draft" style={{ fontSize: '0.7rem' }}>Pendiente</span>
