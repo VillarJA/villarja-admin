@@ -11,7 +11,8 @@
  * 2. See all 25+ test cases with their current status.
  * 3. Send each case individually (or run all pending ones sequentially).
  * 4. See DGII responses per case (trackId, error).
- * 5. Reset all cases back to pending (manual or automatic on error).
+ * 5. Verify DGII acceptance/rejection status for "sent" cases.
+ * 6. Reset all cases back to pending (manual or automatic on error).
  */
 
 import { useState, useRef, useCallback } from 'react';
@@ -94,8 +95,11 @@ export function CertificacionModal({ company, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [runningAll, setRunningAll] = useState(false);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [checkingAll, setCheckingAll] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const apiKey = company.apiKey ?? '';
@@ -214,6 +218,56 @@ export function CertificacionModal({ company, onClose }: Props) {
     showToast('Todos los casos enviados');
   }
 
+  // ── Verify DGII status for one case ──
+  async function handleCheckCase(id: string) {
+    setCheckingId(id);
+    setError('');
+    try {
+      const res = await fetch(`/api/certification/cases/${id}/check`, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? 'Error al consultar estado DGII');
+      } else {
+        showToast(json.message ?? `Estado DGII actualizado`);
+      }
+      await fetchCases();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error de red');
+    } finally {
+      setCheckingId(null);
+    }
+  }
+
+  // ── Verify all sent cases ──
+  async function handleCheckAll() {
+    setCheckingAll(true);
+    setError('');
+    const sent = cases.filter((c) => c.estado === 'sent');
+    for (const c of sent) {
+      setCheckingId(c.id);
+      try {
+        const res = await fetch(`/api/certification/cases/${c.id}/check`, {
+          method: 'POST',
+          headers: { 'x-api-key': apiKey },
+        });
+        const json = await res.json();
+        if (!res.ok && json.error) {
+          setError(json.error);
+          break;
+        }
+      } catch {
+        // continue
+      }
+      await fetchCases();
+    }
+    setCheckingId(null);
+    setCheckingAll(false);
+    showToast('Estados verificados');
+  }
+
   // ── Reset all ──
   async function handleReset() {
     setLoading(true);
@@ -246,6 +300,9 @@ export function CertificacionModal({ company, onClose }: Props) {
     {} as Record<string, number>,
   );
 
+  const sentCount = counts['sent'] ?? 0;
+  const expandedCase = expandedErrorId ? cases.find((c) => c.id === expandedErrorId) : null;
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -261,7 +318,7 @@ export function CertificacionModal({ company, onClose }: Props) {
       <div
         className="card"
         style={{
-          width: '100%', maxWidth: 780, maxHeight: '92vh',
+          width: '100%', maxWidth: 820, maxHeight: '92vh',
           display: 'flex', flexDirection: 'column', gap: 0,
           overflow: 'hidden',
         }}
@@ -307,6 +364,45 @@ export function CertificacionModal({ company, onClose }: Props) {
             borderBottom: '1px solid var(--border)',
           }}>
             {error}
+          </div>
+        )}
+
+        {/* DGII Error Detail Panel */}
+        {expandedCase?.error_msg && (
+          <div style={{
+            background: '#fef2f2',
+            borderBottom: '1px solid #fecaca',
+            padding: '0.75rem 1.5rem',
+            flexShrink: 0,
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '0.5rem',
+            }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#dc2626' }}>
+                Respuesta DGII — {expandedCase.encf}
+              </span>
+              <button
+                className="btn"
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                onClick={() => setExpandedErrorId(null)}
+              >
+                <Icon name="x" size={12} /> Cerrar
+              </button>
+            </div>
+            <pre style={{
+              margin: 0,
+              fontSize: '0.7rem',
+              color: '#7f1d1d',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.55,
+              maxHeight: 200,
+              overflowY: 'auto',
+              fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+            }}>
+              {expandedCase.error_msg}
+            </pre>
           </div>
         )}
 
@@ -431,6 +527,17 @@ export function CertificacionModal({ company, onClose }: Props) {
                   <Icon name="refresh" size={14} style={{ marginRight: '0.35rem' }} />
                   Reiniciar todos
                 </button>
+                {sentCount > 0 && (
+                  <button
+                    className="btn"
+                    onClick={handleCheckAll}
+                    disabled={checkingAll || runningAll}
+                    style={{ fontSize: '0.8125rem' }}
+                  >
+                    <Icon name="refresh" size={14} style={{ marginRight: '0.35rem' }} />
+                    {checkingAll ? 'Verificando…' : `Verificar enviados (${sentCount})`}
+                  </button>
+                )}
                 <button
                   className="btn btn-primary"
                   onClick={handleSendAll}
@@ -464,19 +571,21 @@ export function CertificacionModal({ company, onClose }: Props) {
                       <th>e-NCF</th>
                       <th>Tipo</th>
                       <th>Canal</th>
-                      <th>Estado</th>
+                      <th>Estado / Respuesta DGII</th>
                       <th>TrackId</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {cases.map((c) => {
-                      const montoTotal = 0; // estado visual only
                       const isRFCE = c.tipo_ecf === 32;
                       const statusInfo = ESTADO_LABEL[c.estado] ?? { label: c.estado, cls: 'draft' };
                       const isBusy = runningId === c.id;
+                      const isChecking = checkingId === c.id;
+                      const hasError = !!c.error_msg;
+                      const isExpanded = expandedErrorId === c.id;
                       return (
-                        <tr key={c.id} style={{ opacity: isBusy ? 0.7 : 1 }}>
+                        <tr key={c.id} style={{ opacity: isBusy || isChecking ? 0.7 : 1 }}>
                           <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 600 }}>
                             {c.encf}
                           </td>
@@ -493,22 +602,25 @@ export function CertificacionModal({ company, onClose }: Props) {
                             {isRFCE ? 'RFCE' : 'Normal'}
                           </td>
                           <td>
-                            <span className={`badge ${statusInfo.cls}`}>
-                              {statusInfo.label}
-                            </span>
-                            {c.error_msg && (
-                              <div
-                                title={c.error_msg}
-                                style={{
-                                  fontSize: '0.7rem', color: 'var(--danger, #dc2626)',
-                                  maxWidth: 180, overflow: 'hidden',
-                                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                                  marginTop: '0.125rem',
-                                }}
-                              >
-                                {c.error_msg}
-                              </div>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                              <span className={`badge ${statusInfo.cls}`}>
+                                {statusInfo.label}
+                              </span>
+                              {hasError && (
+                                <button
+                                  title="Ver respuesta DGII completa"
+                                  onClick={() => setExpandedErrorId(isExpanded ? null : c.id)}
+                                  style={{
+                                    background: 'none', border: 'none', padding: '0 0.25rem',
+                                    cursor: 'pointer', color: '#dc2626', fontSize: '0.7rem',
+                                    textDecoration: 'underline', lineHeight: 1.3,
+                                    display: 'flex', alignItems: 'center', gap: '0.2rem',
+                                  }}
+                                >
+                                  {isExpanded ? 'Ocultar' : 'Ver respuesta DGII'}
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                             {c.track_id
@@ -526,9 +638,21 @@ export function CertificacionModal({ company, onClose }: Props) {
                                 {isBusy ? '…' : 'Enviar'}
                               </button>
                             ) : c.estado === 'sent' ? (
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                {c.sent_at ? new Date(c.sent_at).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  {c.sent_at
+                                    ? new Date(c.sent_at).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })
+                                    : '—'}
+                                </span>
+                                <button
+                                  className="btn"
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+                                  onClick={() => handleCheckCase(c.id)}
+                                  disabled={isChecking || checkingAll}
+                                >
+                                  {isChecking ? '…' : 'Verificar'}
+                                </button>
+                              </div>
                             ) : null}
                           </td>
                         </tr>
