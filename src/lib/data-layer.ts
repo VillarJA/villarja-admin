@@ -15,6 +15,29 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
+// ─── Service-role read helper (bypasses RLS) ─────────────────────────────────
+
+async function adminQuery<T = Record<string, unknown>>(params: {
+  table: string;
+  select?: string;
+  eq?: Record<string, unknown>;
+  neq?: Record<string, string>;
+  gte?: Record<string, string>;
+  order?: { column: string; ascending?: boolean };
+  limit?: number;
+}): Promise<T[]> {
+  const res = await fetch('/api/admin/query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    throw new Error(String(body.error ?? `Error ${res.status} leyendo ${params.table}`));
+  }
+  return res.json() as Promise<T[]>;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function generateApiKey(prefix: 'vja_live' | 'vja_cert' | 'vja_test' = 'vja_live'): string {
@@ -173,33 +196,29 @@ export async function getClienteById(id: string): Promise<Company | null> {
 // ─── READ: Facturas ────────────────────────────────────────────────────────────
 
 export async function getFacturas(): Promise<Factura[]> {
-  if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('ecf_documents')
-      .select('*, companies(razon_social, rnc)')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (error) return [];
-    if (!data?.length) return [];
-    return data.map((row) => mapFactura(row as Record<string, unknown>));
+    const data = await adminQuery({
+      table: 'ecf_documents',
+      select: '*, companies(razon_social, rnc)',
+      order: { column: 'created_at', ascending: false },
+      limit: 200,
+    });
+    return data.map((row) => mapFactura(row));
   } catch {
     return [];
   }
 }
 
 export async function getFacturasForCliente(companyId: string): Promise<Factura[]> {
-  if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('ecf_documents')
-      .select('*, companies(razon_social, rnc)')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(6);
-    if (error) return [];
-    if (!data?.length) return [];
-    return data.map((row) => mapFactura(row as Record<string, unknown>));
+    const data = await adminQuery({
+      table: 'ecf_documents',
+      select: '*, companies(razon_social, rnc)',
+      eq: { company_id: companyId },
+      order: { column: 'created_at', ascending: false },
+      limit: 6,
+    });
+    return data.map((row) => mapFactura(row));
   } catch {
     return [];
   }
@@ -208,16 +227,14 @@ export async function getFacturasForCliente(companyId: string): Promise<Factura[
 // ─── READ: Recepciones (Protocolo Emisor-Receptor) ────────────────────────────
 
 export async function getRecepciones(): Promise<Recepcion[]> {
-  if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('received_ecf_documents')
-      .select('*, companies(razon_social)')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    if (error || !data?.length) return [];
-    return data.map((row) => {
-      const r = row as Record<string, unknown>;
+    const data = await adminQuery({
+      table: 'received_ecf_documents',
+      select: '*, companies(razon_social)',
+      order: { column: 'created_at', ascending: false },
+      limit: 200,
+    });
+    return data.map((r) => {
       const co = (r['companies'] as Record<string, unknown> | null) ?? {};
       return {
         id:           String(r['id']            ?? ''),
@@ -238,30 +255,25 @@ export async function getRecepciones(): Promise<Recepcion[]> {
 }
 
 export async function getRecepcionesForCliente(companyId: string): Promise<Recepcion[]> {
-  if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('received_ecf_documents')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error || !data?.length) return [];
-    return data.map((row) => {
-      const r = row as Record<string, unknown>;
-      return {
-        id:           String(r['id']            ?? ''),
-        companyId:    String(r['company_id']    ?? ''),
-        razonSocial:  String(r['rnc_emisor']    ?? '—'),
-        rncEmisor:    String(r['rnc_emisor']    ?? '—'),
-        rncComprador: String(r['rnc_comprador'] ?? '—'),
-        encf:         String(r['encf']          ?? '—'),
-        tipoEcf:      r['tipo_ecf'] != null ? Number(r['tipo_ecf']) : null,
-        tipo:         (r['tipo'] === 'aprobacion' ? 'aprobacion' : 'ecf') as 'ecf' | 'aprobacion',
-        procesado:    Boolean(r['procesado']),
-        fecha:        new Date(String(r['created_at'])),
-      } satisfies Recepcion;
+    const data = await adminQuery({
+      table: 'received_ecf_documents',
+      eq: { company_id: companyId },
+      order: { column: 'created_at', ascending: false },
+      limit: 50,
     });
+    return data.map((r) => ({
+      id:           String(r['id']            ?? ''),
+      companyId:    String(r['company_id']    ?? ''),
+      razonSocial:  String(r['rnc_emisor']    ?? '—'),
+      rncEmisor:    String(r['rnc_emisor']    ?? '—'),
+      rncComprador: String(r['rnc_comprador'] ?? '—'),
+      encf:         String(r['encf']          ?? '—'),
+      tipoEcf:      r['tipo_ecf'] != null ? Number(r['tipo_ecf']) : null,
+      tipo:         (r['tipo'] === 'aprobacion' ? 'aprobacion' : 'ecf') as 'ecf' | 'aprobacion',
+      procesado:    Boolean(r['procesado']),
+      fecha:        new Date(String(r['created_at'])),
+    }) satisfies Recepcion);
   } catch {
     return [];
   }
@@ -270,26 +282,19 @@ export async function getRecepcionesForCliente(companyId: string): Promise<Recep
 // ─── READ: Chart data ─────────────────────────────────────────────────────────
 
 export async function getChartData30d(): Promise<number[]> {
-  if (!supabase) {
-    // Return zeroed array — no invented data
-    return new Array(30).fill(0);
-  }
   try {
     const since = new Date();
     since.setDate(since.getDate() - 29);
     since.setHours(0, 0, 0, 0);
-
-    const { data, error } = await supabase
-      .from('ecf_documents')
-      .select('created_at')
-      .gte('created_at', since.toISOString());
-
-    if (error || !data) return new Array(30).fill(0);
-
+    const data = await adminQuery({
+      table: 'ecf_documents',
+      select: 'created_at',
+      gte: { created_at: since.toISOString() },
+    });
     const counts = new Array(30).fill(0);
     const now = new Date();
     for (const row of data) {
-      const d = new Date(String((row as Record<string, unknown>).created_at));
+      const d = new Date(String(row.created_at));
       const dayIdx = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
       if (dayIdx >= 0 && dayIdx < 30) counts[29 - dayIdx]++;
     }
@@ -305,27 +310,21 @@ export async function getDonutTipos(): Promise<DonutItem[]> {
     33: '#d9700a', 41: '#6b3fa0', 45: '#0e8a8a',
     43: '#b8860b', 44: '#c2185b', 46: '#0e8a8a', 47: '#9092a8',
   };
-  if (!supabase) {
-    return [];
-  }
   try {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-
-    const { data, error } = await supabase
-      .from('ecf_documents')
-      .select('tipo_ecf')
-      .gte('created_at', startOfMonth.toISOString());
-
-    if (error || !data?.length) return [];
-
+    const data = await adminQuery({
+      table: 'ecf_documents',
+      select: 'tipo_ecf',
+      gte: { created_at: startOfMonth.toISOString() },
+    });
+    if (!data.length) return [];
     const counts: Record<number, number> = {};
     for (const row of data) {
-      const tipo = Number((row as Record<string, unknown>).tipo_ecf ?? 31);
+      const tipo = Number(row.tipo_ecf ?? 31);
       counts[tipo] = (counts[tipo] || 0) + 1;
     }
-
     return Object.entries(counts)
       .map(([tipo, value]) => ({
         tipo: Number(tipo),
@@ -342,16 +341,13 @@ export async function getDonutTipos(): Promise<DonutItem[]> {
 // ─── READ: Sequences ──────────────────────────────────────────────────────────
 
 export async function getSecuencias(companyId: string): Promise<Secuencia[]> {
-  if (!supabase) return [];
   try {
-    const { data, error } = await supabase
-      .from('sequences')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('tipo_ecf', { ascending: true });
-    if (error) return [];
-    if (!data?.length) return [];
-    return data.map((row) => mapSecuencia(row as Record<string, unknown>));
+    const data = await adminQuery({
+      table: 'sequences',
+      eq: { company_id: companyId },
+      order: { column: 'tipo_ecf', ascending: true },
+    });
+    return data.map((row) => mapSecuencia(row));
   } catch {
     return [];
   }
@@ -360,30 +356,28 @@ export async function getSecuencias(companyId: string): Promise<Secuencia[]> {
 // ─── READ: Contingencia ───────────────────────────────────────────────────────
 
 export async function getContingenciaQueue(): Promise<ContingenciaItem[]> {
-  if (!supabase) return CONTINGENCIA_QUEUE;
   try {
-    const { data, error } = await supabase
-      .from('contingencia_cola')
-      .select('*, companies(razon_social)')
-      .order('created_at', { ascending: true });
-    if (error || !data?.length) return CONTINGENCIA_QUEUE;
-    return data.map((row) => mapContingencia(row as Record<string, unknown>));
+    const data = await adminQuery({
+      table: 'contingencia_cola',
+      select: '*, companies(razon_social)',
+      order: { column: 'created_at', ascending: true },
+    });
+    if (!data.length) return CONTINGENCIA_QUEUE;
+    return data.map((row) => mapContingencia(row));
   } catch {
     return CONTINGENCIA_QUEUE;
   }
 }
 
 export async function getContingenciaHist(): Promise<ContingenciaHist[]> {
-  if (!supabase) return CONTINGENCIA_HIST;
   try {
-    const { data, error } = await supabase
-      .from('contingencia_eventos')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (error || !data?.length) return CONTINGENCIA_HIST;
-    return data.map((row) => {
-      const r = row as Record<string, unknown>;
+    const data = await adminQuery({
+      table: 'contingencia_eventos',
+      order: { column: 'created_at', ascending: false },
+      limit: 20,
+    });
+    if (!data.length) return CONTINGENCIA_HIST;
+    return data.map((r) => {
       const d = new Date(String(r.created_at));
       const ts = new Intl.DateTimeFormat('es-DO', {
         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -403,15 +397,14 @@ export async function getContingenciaHist(): Promise<ContingenciaHist[]> {
 // ─── READ: Audit log ──────────────────────────────────────────────────────────
 
 export async function getAuditLog(): Promise<AuditLog[]> {
-  if (!supabase) return AUDIT_LOG;
   try {
-    const { data, error } = await supabase
-      .from('audit_log')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error || !data?.length) return AUDIT_LOG;
-    return data.map((row) => mapAuditLog(row as Record<string, unknown>));
+    const data = await adminQuery({
+      table: 'audit_log',
+      order: { column: 'created_at', ascending: false },
+      limit: 50,
+    });
+    if (!data.length) return AUDIT_LOG;
+    return data.map((row) => mapAuditLog(row));
   } catch {
     return AUDIT_LOG;
   }
@@ -475,14 +468,10 @@ const DEFAULT_CONFIG: PortalConfig = {
 };
 
 export async function getPortalConfig(): Promise<PortalConfig> {
-  if (!supabase) return DEFAULT_CONFIG;
   try {
-    const { data, error } = await supabase
-      .from('portal_config')
-      .select('*')
-      .single();
-    if (error || !data) return DEFAULT_CONFIG;
-    const r = data as Record<string, unknown>;
+    const rows = await adminQuery({ table: 'portal_config' });
+    const r = rows[0];
+    if (!r) return DEFAULT_CONFIG;
     return {
       adminName: String(r.admin_name ?? DEFAULT_CONFIG.adminName),
       adminEmail: String(r.admin_email ?? DEFAULT_CONFIG.adminEmail),
@@ -548,35 +537,29 @@ export async function getPlanes(): Promise<PlanStat[]> {
     { id: 'pro', nombre: 'Pro', precio: 8900, facturas_limite: 5000, tipos_ecf: '31, 32, 33, 34, 41, 43', empresas_limite: 3, descripcion: 'El más elegido por las PYMEs', popular: true, features: ['5,000 e-CF / mes', 'Tipos 31–34, 41, 43', 'Hasta 3 empresas', 'Soporte prioritario', 'Webhooks + reportes', 'Contingencia automática'], clienteCount: 0 },
     { id: 'enterprise', nombre: 'Enterprise', precio: 29500, facturas_limite: 50000, tipos_ecf: 'Todos los tipos e-CF', empresas_limite: 25, descripcion: 'Alto volumen y multi-empresa', popular: false, features: ['50,000 e-CF / mes', 'Todos los tipos e-CF', 'Hasta 25 empresas', 'SLA 99.9% + soporte 24/7', 'Gerente de cuenta', 'Integración dedicada'], clienteCount: 0 },
   ];
-  if (!supabase) return fallback;
   try {
-    const [planesRes, companiesRes] = await Promise.all([
-      supabase.from('subscription_plans').select('*').order('precio', { ascending: true }),
-      supabase.from('companies').select('plan'),
+    const [planesData, companiesData] = await Promise.all([
+      adminQuery({ table: 'subscription_plans', order: { column: 'precio', ascending: true } }),
+      adminQuery({ table: 'companies', select: 'plan' }),
     ]);
-    if (planesRes.error || !planesRes.data?.length) return fallback;
-
+    if (!planesData.length) return fallback;
     const counts: Record<string, number> = {};
-    for (const c of (companiesRes.data ?? [])) {
-      const plan = String((c as Record<string, unknown>).plan || '');
+    for (const c of companiesData) {
+      const plan = String(c.plan || '');
       counts[plan] = (counts[plan] || 0) + 1;
     }
-
-    return planesRes.data.map((row) => {
-      const r = row as Record<string, unknown>;
-      return {
-        id: String(r.id),
-        nombre: String(r.nombre),
-        precio: Number(r.precio),
-        facturas_limite: Number(r.facturas_limite),
-        tipos_ecf: String(r.tipos_ecf),
-        empresas_limite: Number(r.empresas_limite),
-        descripcion: String(r.descripcion ?? ''),
-        popular: Boolean(r.popular),
-        features: Array.isArray(r.features) ? (r.features as string[]) : [],
-        clienteCount: counts[String(r.nombre)] ?? 0,
-      };
-    });
+    return planesData.map((r) => ({
+      id: String(r.id),
+      nombre: String(r.nombre),
+      precio: Number(r.precio),
+      facturas_limite: Number(r.facturas_limite),
+      tipos_ecf: String(r.tipos_ecf),
+      empresas_limite: Number(r.empresas_limite),
+      descripcion: String(r.descripcion ?? ''),
+      popular: Boolean(r.popular),
+      features: Array.isArray(r.features) ? (r.features as string[]) : [],
+      clienteCount: counts[String(r.nombre)] ?? 0,
+    }));
   } catch {
     return fallback;
   }
@@ -771,33 +754,32 @@ export async function createDefaultSequencias(
 // Counts transmitted documents (non-draft) per tipo_ecf and persists to sequences.
 // Draft invoices are excluded: they haven't been sent to DGII yet.
 async function computeAndPersistSecuenciasCounts(companyId: string): Promise<void> {
-  const { data: docs, error: docsErr } = await supabase!
-    .from('ecf_documents')
-    .select('tipo_ecf')
-    .eq('company_id', companyId)
-    .neq('estado', 'draft');
+  if (!supabase) throw new Error('Supabase no configurado');
 
-  if (docsErr) throw new Error(docsErr.message);
+  const docs = await adminQuery({
+    table: 'ecf_documents',
+    select: 'tipo_ecf',
+    eq: { company_id: companyId },
+    neq: { estado: 'draft' },
+  });
 
   const counts: Record<number, number> = {};
-  for (const doc of (docs ?? [])) {
-    const tipo = Number((doc as Record<string, unknown>).tipo_ecf ?? 31);
+  for (const doc of docs) {
+    const tipo = Number(doc.tipo_ecf ?? 31);
     counts[tipo] = (counts[tipo] || 0) + 1;
   }
 
-  const { data: seqs, error: seqsErr } = await supabase!
-    .from('sequences')
-    .select('tipo_ecf, ambiente')
-    .eq('company_id', companyId);
+  const seqs = await adminQuery({
+    table: 'sequences',
+    select: 'tipo_ecf, ambiente',
+    eq: { company_id: companyId },
+  });
 
-  if (seqsErr) throw new Error(seqsErr.message);
-
-  for (const seq of (seqs ?? [])) {
-    const s = seq as Record<string, unknown>;
+  for (const s of seqs) {
     const tipo = Number(s.tipo_ecf);
     const amb = String(s.ambiente ?? '');
     const usadas = counts[tipo] ?? 0;
-    const { error: updErr } = await supabase!
+    const { error: updErr } = await supabase
       .from('sequences')
       .update({ usadas })
       .eq('company_id', companyId)
@@ -809,7 +791,6 @@ async function computeAndPersistSecuenciasCounts(companyId: string): Promise<voi
 
 // Silent refresh — recalculates counters on page load without writing an audit log.
 export async function refreshSecuenciasUsadas(companyId: string): Promise<Secuencia[]> {
-  if (!supabase) return getSecuencias(companyId);
   try {
     await computeAndPersistSecuenciasCounts(companyId);
   } catch { /* fail silently — stale stored value is shown instead */ }
@@ -821,7 +802,6 @@ export async function syncSecuenciasUsadas(
   companyId: string,
   razon: string,
 ): Promise<Secuencia[]> {
-  if (!supabase) throw new Error('Supabase no configurado');
   await computeAndPersistSecuenciasCounts(companyId);
   await insertAuditLog('Sincronizó contadores de secuencias e-NCF desde ecf_documents', razon);
   return getSecuencias(companyId);
