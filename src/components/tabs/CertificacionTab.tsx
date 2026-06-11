@@ -724,7 +724,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   }, [apiKey]);
 
   useEffect(() => {
-    if (selectedPaso === 4 && apiKey) {
+    if ((selectedPaso === 4 || selectedPaso === 5) && apiKey) {
       fetchSimStatus();
     }
   }, [selectedPaso, apiKey, fetchSimStatus]);
@@ -857,7 +857,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
       a.click();
       URL.revokeObjectURL(href);
     } catch (err) {
-      setSimError(err instanceof Error ? `Error al descargar ${type.toUpperCase()}: ${err.message}` : `Error al descargar ${type.toUpperCase()}`);
+      setMarkError(err instanceof Error ? `Error al descargar ${type.toUpperCase()}: ${err.message}` : `Error al descargar ${type.toUpperCase()}`);
     }
   }, [apiKey]);
 
@@ -1129,30 +1129,65 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         );
       }
 
-      case 5:
+      case 5: {
+        const simReady = simCases.filter((c) => c.estado === 'aceptado' || c.estado === 'manual');
+        const missingStep5Types = simReady.length > 0
+          ? [31, 32].filter((tipo) => !simReady.some((c) => c.tipoEcf === tipo))
+          : missingSimulationTypes;
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Descarga las <strong>representaciones impresas (PDF)</strong> de los e-CF emitidos en el <strong>Paso 4</strong> y súbelas al portal DGII. Este es el paso oficial donde la DGII revisa formato, contenido mínimo, QR y consistencia entre el PDF y el e-CF remitido.
+              Descarga las <strong>representaciones impresas (PDF)</strong> de los e-CF del <strong>Paso 4</strong> y súbelas al portal DGII. La DGII revisa formato, QR, código de seguridad y consistencia con el e-CF.
             </p>
             {!isCompleted(4, completed) && !isCompleted(5, completed) && (
               <AlertBox type="warning">
-                <strong>Prerequisito:</strong> Completa primero el Paso 4. Las representaciones impresas deben salir de comprobantes reales emitidos en <strong>certecf</strong>.
+                <strong>Prerequisito:</strong> Completa el Paso 4 antes de cargar representaciones impresas.
               </AlertBox>
             )}
             <AlertBox type="info">
-              Según DGII, las representaciones impresas deben remitirse en <strong>PDF</strong> y el tamaño máximo permitido por carga es <strong>10 MB</strong>. Deben reflejar los datos del e-CF de simulación: e-NCF, RNCs, fecha, montos, código de seguridad y código QR.
+              Las representaciones impresas deben estar en <strong>PDF</strong> (máx. 10 MB por carga). Deben reflejar: e-NCF, RNCs, fecha, montos, código de seguridad y código QR.
             </AlertBox>
-            {facturasLoading ? (
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Cargando comprobantes de simulación…</p>
-            ) : riFacturas.length === 0 ? (
-              <AlertBox type="warning">
-                Aún no aparecen e-CF aceptados en <strong>certecf</strong> para descargar como PDF. Emite primero los comprobantes del Paso 4 y vuelve a esta pantalla.
-              </AlertBox>
-            ) : (
+
+            {simReady.length > 0 ? (
               <div style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                 <div style={{ padding: '0.625rem 0.75rem', background: 'var(--surface-alt, #f9f9f8)', borderBottom: '1px solid var(--border)' }}>
-                  <strong style={{ fontSize: '0.8rem', color: 'var(--text)' }}>PDFs listos desde simulación</strong>
+                  <strong style={{ fontSize: '0.8rem', color: 'var(--text)' }}>PDFs de simulación — {simReady.length} disponibles</strong>
+                  <div style={{ marginTop: '0.2rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Descarga cada PDF y súbelo al portal DGII en Representaciones Impresas.
+                  </div>
+                </div>
+                {simReady.map((c) => (
+                  <div key={c.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    padding: '0.375rem 0.75rem', borderBottom: '1px solid var(--border)',
+                    flexWrap: 'wrap', minHeight: 38,
+                  }}>
+                    <code style={{ fontSize: '0.72rem', color: 'var(--text)', fontFamily: 'var(--font-mono, monospace)', minWidth: 140 }}>
+                      {c.encf}
+                    </code>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', background: 'var(--surface-alt, #f9f9f8)', padding: '0.1rem 0.35rem', borderRadius: 3, border: '1px solid var(--border)', flexShrink: 0 }}>
+                      T{c.tipoEcf}
+                    </span>
+                    <span className="badge ok" style={{ fontSize: '0.65rem', flexShrink: 0 }}>
+                      {c.isRfce ? 'RFCE' : c.isManual ? 'Manual' : 'Aceptado'}
+                    </span>
+                    <button
+                      className="btn btn-primary"
+                      style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '0.25rem 0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
+                      onClick={() => downloadSimFile(c.id, c.encf, 'pdf')}
+                    >
+                      <Icon name="file" size={12} />
+                      PDF
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : facturasLoading ? (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Cargando comprobantes…</p>
+            ) : riFacturas.length > 0 ? (
+              <div style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ padding: '0.625rem 0.75rem', background: 'var(--surface-alt, #f9f9f8)', borderBottom: '1px solid var(--border)' }}>
+                  <strong style={{ fontSize: '0.8rem', color: 'var(--text)' }}>e-CF aceptados en certecf</strong>
                   <div style={{ marginTop: '0.2rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     Descarga estos archivos y súbelos al portal DGII en la sección de Representaciones Impresas.
                   </div>
@@ -1166,10 +1201,15 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                   />
                 ))}
               </div>
-            )}
-            {missingSimulationTypes.length > 0 && (
+            ) : (
               <AlertBox type="warning">
-                Todavía faltan comprobantes base del Paso 4 para: <strong>{missingSimulationTypes.map((tipo) => `T${tipo}`).join(', ')}</strong>.
+                Aún no hay e-CF de simulación aceptados. Completa el Paso 4 y vuelve aquí.
+              </AlertBox>
+            )}
+
+            {missingStep5Types.length > 0 && (
+              <AlertBox type="warning">
+                Faltan PDFs del Paso 4 para: <strong>{missingStep5Types.map((tipo) => `T${tipo}`).join(', ')}</strong>.
               </AlertBox>
             )}
             <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.5rem', color: 'var(--text)' }}>
@@ -1188,16 +1228,17 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
               ))}
             </div>
             <InstructionList items={[
-              'Descarga el PDF de cada e-CF emitido en certecf que vayas a presentar como evidencia',
+              'Haz clic en PDF en cada fila de arriba para descargar la representación impresa',
               'Abre el portal DGII → Certificación → Representaciones Impresas',
               'Selecciona el tipo de comprobante correcto y sube el PDF correspondiente',
-              'Marca en esta lista cada tipo que ya sometiste en DGII para llevar control visual del set cargado',
+              'Marca en esta lista cada tipo que ya sometiste al portal DGII',
               'Cuando termines la carga de todos los tipos aplicables, marca este paso como completado',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
+      }
 
       case 6:
         return (
