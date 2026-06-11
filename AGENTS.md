@@ -8,17 +8,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <claude-mem-context>
 # Memory Context
 
-# [villarja-admin-portal] recent context, 2026-06-10 12:38pm AST
+# [villarja-admin-portal] recent context, 2026-06-10 2:42pm AST
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (17,775t read) | 652,284t work | 97% savings
+Stats: 50 obs (19,539t read) | 885,355t work | 98% savings
 
 ### Jun 10, 2026
-S1040 Add XML download capability to CertificacionModal so admins can download signed XMLs for manual upload to the DGII certecf portal (required for tipo 32 &lt; RD$250K Step 2 manual upload) (Jun 10, 7:07 AM)
-S1041 Fix DGII eCF XML rejection: "La estructura del archivo XML no es válido" for Factura de Consumo Electrónica &lt;250Mil — portal expects full eCF format, not RFCE summary (Jun 10, 7:24 AM)
 S1042 Fix rechazo de Facturas de Consumo menores a 250,000 DOP al subir XML manualmente al portal DGII de certificación (T32 RFCE) (Jun 10, 8:58 AM)
 S1043 Fix "S/D" placeholder appearing on printed ECF documents — add DireccionEmisor, Provincia, and Municipio fields to company creation form and ECF API fallback logic (Jun 10, 9:09 AM)
 S1044 Test RFCE XML download to verify ECF XML now contains correct Emisor fields (no S/D placeholders) (Jun 10, 9:29 AM)
@@ -26,70 +24,59 @@ S1045 Fix DGII eCF certification test set rejections caused by IndicadorMontoGra
 S1046 Impeccable audit of villarja-admin-portal — comprehensive technical quality audit across accessibility, performance, theming, responsive design, and anti-patterns (Jun 10, 10:26 AM)
 S1047 /impeccable audit on villarja-admin-portal — comprehensive accessibility, performance, theming, and responsive audit across all components and global stylesheet (Jun 10, 10:52 AM)
 S1048 Impeccable audit of villarja-admin-portal — full technical quality scan across 5 dimensions with scored report (Jun 10, 11:12 AM)
-11628 12:02p 🔴 certification.controller.ts: Replaced Live Clock FechaHoraFirma with Stable Noon Timestamp Derived from FechaEmision
-11629 " 🔴 RFCE Certification: Removed Stale XML Cache Check — Always Rebuild XML on Each Submission
-11630 " 🔴 XML Download Path in certification.controller.ts Also Patched to Always Rebuild Instead of Using Cached XML
-11631 12:03p 🟣 Unit Test Added: Verifies Stable Certification Signature Timestamp Derived from FechaEmision
-11632 " 🔵 All 5 Unit Tests Pass After Stable Timestamp Fix in certification.controller.ts
-11633 " 🔵 villarja-ecf-api TypeScript Build Passes Clean After All certification.controller.ts Changes
-11634 " ✅ Committed: "fix: rebuild certification manual xml from current set" — villarja-ecf-api master 19483c2
-11635 " ✅ Fix Pushed to GitHub: villarja-ecf-api master a09c9d1..19483c2
-11636 12:06p 🔵 Post-Fix Generated XML for E320000000012 Confirms MunicipioComprador and Stable Timestamp Are Present
-11637 " 🔵 Impeccable Audit Skill — Reference Documentation Structure
-11638 12:07p 🔵 DGII Test Data Stores Municipio as "#e" Placeholder — XML Builder Resolves It to MunicipioComprador=030307
-11639 " 🔵 villarja-admin-portal Missing PRODUCT.md and DESIGN.md
-11640 " 🔵 villarja-admin-portal Component Inventory
-11641 12:08p 🔵 villarja-admin-portal Design System — globals.css Full Token Inventory
-11642 " 🔵 villarja-admin-portal App Route Structure
-11643 " 🔵 All 4 TipoeCF=32 Certification Cases Now Show estado="accepted" After Fix
-11644 12:09p 🔵 No Hard-Coded Hex Colors in TSX Components — Theming Score Positive
-11645 " 🔵 LineChart Has Hardcoded SVG Width (W=760) — Responsive Issue
-11646 " 🔵 Dashboard Page Uses KPI Card Grid — Anti-Pattern Present
-11647 " 🔵 CertificacionModal — Complex DGII Certification Test Workflow
-11648 " 🔵 KPICard Has No ARIA Semantics — Accessibility Gap
-11649 " 🔵 ToggleRow Switch Button Missing role="switch" and aria-checked — WCAG Violation
-11650 12:13p 🔵 Fluxymed Certification Modal Step Audit Initiated
-11651 " 🔵 Fluxymed vs VillarJA Certification Modal Audit Plan
-11652 12:14p 🔵 VillarJA CertificacionTab: 15-Step Certification Flow Structure
-11653 " 🔵 VillarJA CertificacionModal: Step 2 Test Set Upload & Send Flow
-11654 " 🔵 Fluxymed Certification: 15-Step Wizard Structure in cert-client.tsx
-11655 " 🔵 Fluxymed certification-actions.ts: Server Actions for 15-Step DGII Wizard
-11656 12:15p 🔵 VillarJA CertificacionTab: Step 3 Uses AprobacionModal; Step 8 Tests Digital Signature
-11657 " 🔵 VillarJA AprobacionModal: Step 3 Commercial Approval Excel Upload & Send
-11658 " 🔵 Fluxymed Step 5 PDF Generator: RI Generation with 10MB Size Cap and DGII Slot Mapping
-11659 " 🔵 Fluxymed Certification Session Initialization: Step 1 Auto-Completed, Paso4 State Pre-Built
-11660 12:16p 🔵 VillarJA ECF API: Certification Progress Stored as companies Table Array; No Step Validation
-11661 " 🔵 VillarJA ECF API: Case Rejection Resets All Sibling Cases; XML Download Re-Signs On-Demand
-11662 12:17p 🔵 Fluxymed Steps 9 & 11: Real Receptor Logs Table vs VillarJA Textual Instructions
-11663 " 🔵 Fluxymed Certification renderStepContent: Complete Component Mapping for All 15 Steps
-11664 " ✅ Smoothed CSS animation easing curves across KPI and badge elements
-11665 " 🔵 Audit Finding: VillarJA Steps 7/12 Show 3 URLs; Fluxymed Shows 4 (Missing Token URL)
-11666 " ✅ Replaced hardcoded color values with CSS variable for dashboard text colors
-11667 12:18p ✅ Added aria-label accessibility attribute to client search input
-11668 " ✅ Enhanced toggle switch accessibility and theme support in configuration page
-11669 " ✅ Made donut chart legend items keyboard accessible by converting to button elements
-11670 12:19p ✅ Replaced hardcoded brand gradient color with CSS variable in logo elements
-11671 " 🔄 Moved KPI grid layout from inline styles to CSS class
-11672 " ✅ Added keyboard navigation support to clients table rows
-11673 " 🔄 Converted XLSX library to dynamic import for lazy loading
-11674 " 🔄 Moved chart grid layout from inline styles to CSS class
-11675 " ✅ Added keyboard focus indicators and responsive grid classes to globals.css
-11676 " 🔄 Completed dashboard grid layout refactoring by removing final inline style
-11677 12:20p ✅ Added keyboard navigation to dashboard invoice table rows
-S1049 /impeccable audit — comprehensive cleanup of animation easing, color hardcoding, accessibility, responsive design, and code splitting (Jun 10, 12:22 PM)
-**Investigated**: Animation curves in globals.css (kpiPop, badgePop); hardcoded colors in logo gradients and component styles; accessibility patterns in interactive elements (toggles, tables, search inputs, chart legends); layout definitions across dashboard pages; Excel import loading strategy in certification modal
+S1049 /impeccable audit — comprehensive cleanup of animation easing, color hardcoding, accessibility, responsive design, and code splitting (Jun 10, 12:12 PM)
+S1050 Commit + push impeccable audit fixes for villarja-admin-portal (Jun 10, 12:22 PM)
+11700 12:50p 🔵 Wizard Step Progress IS Persisted in DB via companies Table Columns
+11701 " 🔵 DGII Certification Controller: Full Logic for e-CF Test Set, RFCE, and Send Order
+11704 12:53p 🔵 Admin Portal Has Own dgii-docs Copy With XSD Files and Page Screenshots
+11705 " 🔵 AprobacionModal is Step 3 of certeCF — State Is Purely In-Memory
+11706 " 🔵 CertificacionModal Handles DGII Test Set (Not the 15-Step Progress) — Fully API-Backed
+11707 " 🔵 villarja-ecf-api Full Route Surface Including PDF, Catálogos, and All DGII Proxy Endpoints
+11708 " 🔵 Initial DB Schema: Companies Table Has url_recepcion, url_aprobacion, url_autenticacion Fields
+11709 1:01p ⚖️ DGII e-CF Wizard 15-Step Audit Plan — Steps 3–15 Realignment
+11710 " 🟣 AprobacionModal Step 3 — onAllSent Callback and useEffect Added for State Persistence
+11711 1:02p 🟣 Step 3 AprobacionModal — localStorage Persistence and Auto-Completion Signal Implemented
+11712 " 🟣 Step 3 AprobacionModal — All-Done Banner and localStorage Cache Clear on New Excel
+11713 " 🟣 CertificacionTab — Token URL Added and Full DGII e-CF Type Registry Defined
+11714 1:03p 🟣 TypeCheckRow Component Added for Per-Type e-CF Checklist in Steps 5–6
+11715 " 🟣 checkedRITypes State Added to CertificacionTab for Steps 5–6 Per-Type Checklist
+11716 " 🟣 Step 3 Auto-Completion Fully Wired — onAllSent Triggers markStep(3) in CertificacionTab
+11717 " ✅ Step 3 Wizard Copy Aligned with DGII ACECF Terminology and Auto-Complete Explained
+11718 1:04p 🟣 Step 4 Simulation — Prerequisite Warning and Per-Type e-CF Reference Table Added
+11719 1:06p 🟣 Step 5 Redesigned — Prerequisite Alert, TypeCheckRow for T31, and Corrected PDF Instructions
+11720 " 🟣 Step 6 Redesigned — ECF_TYPES_RI Checklist for Types 32–47 with Per-Type TypeCheckRow
+11721 " 🟣 Step 7 Updated — 4 URLs Exposed (Added Autenticación Token URL)
+11722 " 🟣 Steps 9, 10, 11 Updated — ARECF/ACECF Terminology, Active URL Cards, Paso 7 Back-reference Added
+11723 1:07p 🟣 Step 12 Updated — 4 Production URLCards with Token Endpoint and Consistency Note Added
+S1051 DGII e-CF Certification Wizard Audit and Redesign — Steps 3–12 full overhaul with persistence, 4-URL registration, interactive RI checklist, ARECF/ACECF terminology, and prerequisite alerts (Jun 10, 1:08 PM)
+11728 1:20p 🔵 villarja-admin-portal has only AGENTS.md modified
+11729 " 🔵 villarja-admin-portal: existing feature coverage mapped via codebase search
+11730 1:21p 🔵 CertificacionTab implements all 15 DGII certification steps with full UI logic
+11731 " 🔵 villarja-ecf-api backend has PDF generation, updateProgress, and checkCaseStatus endpoints
+11732 " 🔵 AprobacionModal implements Step 3 ACECF Excel import with localStorage persistence
+11733 " 🔵 DGII XSD Schema Contains Invalid Regex Pattern in Date Validation
+11735 " 🔵 villarja-ecf-api Project Structure for ACECF Document Type
+11734 " 🔵 villarja-admin-portal API routes are thin proxies to villarja-ecf-api backend
+11736 " 🔵 Client detail page has 4 tabs: Secuencias, Facturas, Recepciones, Certificación with full CRUD
+11737 1:22p 🔵 XSD Files Exist in Two Locations: dgii-docs/xsd/ (originals) and src/xsd/ (active)
+11738 " 🔵 CertificacionModal exists alongside CertificacionTab, handles test-set case status checks
+11739 " 🔵 XSD Validation Architecture: xmllint-wasm with Multi-Path Fallback Resolution
+11740 " 🔵 Exact Location of Invalid XSD Regex: DateValidation simpleType at Line 72
+11741 " 🔵 CertificacionModal manages Step 2 DGII test-set: import, send, async poll, XML download, and reset
+11742 " 🔵 KNOWN_DGII_SCHEMA_FIXES Mechanism Already Exists for Patching Broken DGII Schemas at Runtime
+11743 1:23p 🔵 villarja-ecf-api PDF generation uses XML parsing with DB fallback for missing fields
+11744 " 🔵 villarja-admin-portal missing DGII root certificate (.cer) upload requirement for Step 8
+11745 1:24p 🔵 Both XSD Copies Contain Identical Broken Pattern — Confirming Bug is in Original DGII-Issued Schema
+11746 " 🔴 Fixed Invalid XSD Regex in ACECF_v_1_0.xsd DateValidation Pattern
+11747 " 🔴 Applied Same DateValidation Regex Fix to dgii-docs/xsd/ACECF_v_1_0.xsd Reference Copy
+11748 1:25p 🔵 RFCE_32_v_1_0.xsd Contains Three Additional Invalid Non-Capturing Group Patterns
+11749 " 🔵 RFCE_32_v_1_0.xsd FechaType Has Two Bugs: Invalid (?:19|20) and Erroneous $ in Character Class
+11750 " 🔵 RFCE_32_v_1_0.xsd Decimal Types Confirmed: Three Types Use Invalid (?:.[0-9]{2})? Optional Group
+11751 " 🔴 Fixed Invalid (?:19|20) Non-Capturing Group in RFCE_32_v_1_0.xsd FechaType
+11752 " 🔴 Fixed All Three Decimal Type Non-Capturing Groups in RFCE_32_v_1_0.xsd with Escaped Dot
+11753 1:26p 🔵 Glob Pattern Limitation: Relative Sub-Path Patterns Fail to Match When Combined with Explicit Base Path
+11754 " 🔵 dgii-docs/xsd/RFCE_32_v_1_0.xsd Still Has the Broken (?:19|20) Pattern — Not Yet Patched
+11755 " 🔴 Fixed (?:19|20) in dgii-docs/xsd/RFCE_32_v_1_0.xsd FechaType — Three Decimal Patterns Still Unpatched in Reference Copy
 
-**Learned**: The codebase had scattered hardcoded color values and inline grid definitions reducing maintainability; animation easing was inconsistent (overshoot curves mixed with standard ease-out); interactive elements lacked semantic ARIA attributes and keyboard navigation; responsive design was missing entirely; heavy dependencies like XLSX were loaded statically even when unused. CSS variable system was already established but underutilized.
-
-**Completed**: — Animation: unified kpiPop and badgePop easing curves to cubic-bezier(0.16, 1, 0.3, 1)
-    — Colors: replaced #d33 with var(--brand-600), #9092a8 with var(--side-text-dim), #fff toggle knob with var(--surface)
-    — Accessibility: added role="switch", aria-checked, aria-label to toggle buttons; added tabIndex={0} + onKeyDown(Enter) to 2 tables; added aria-label to search input; converted DonutChart legend divs to keyboard-focusable buttons; added :focus-visible rings for 11 element classes
-    — Responsive: created .grid-kpi (4→2→1 col at breakpoints) and .grid-2col (2-col→1-col) classes; migrated all 3 dashboard grid layouts from inline styles to these classes
-    — Performance: converted XLSX import to dynamic on-demand import in CertificacionModal
-    — Build: production build passed clean (29s compile, TypeScript OK, 22 pages generated)
-
-**Next Steps**: Session appears complete; build verified clean. If continuing, next targets would be: audit other components for remaining hardcoded colors or inline styles; extend keyboard navigation pattern to other clickable elements (modal buttons, pagination); review other charts/tables for same accessibility treatment; consider dark-mode validation of all color variable changes.
-
-
-Access 652k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 885k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

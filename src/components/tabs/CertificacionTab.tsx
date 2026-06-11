@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon } from '@/components/Icons';
 import { getFacturasForCliente } from '@/lib/data-layer';
 import type { Company, Factura } from '@/types';
@@ -406,6 +406,111 @@ function FacturaEvidenceRow({
   );
 }
 
+// ─── Simulation sub-components ────────────────────────────────────────────────
+
+const SIM_ESTADO_BADGE: Record<string, string> = {
+  pendiente: 'draft', en_progreso: 'info', aceptado: 'ok',
+  rechazado: 'err', error: 'err', manual: 'warn',
+};
+
+const SIM_ESTADO_LABEL: Record<string, string> = {
+  pendiente: 'Pendiente', en_progreso: 'Enviando…', aceptado: 'Aceptado',
+  rechazado: 'Rechazado', error: 'Error', manual: 'Manual ↓',
+};
+
+interface SimCase {
+  id: string;
+  casoPrueba: string;
+  tipoEcf: number;
+  isManual: boolean;
+  isRfce: boolean;
+  sendOrder: number;
+  estado: string;
+  encf: string;
+  trackId?: string | null;
+  codigoSeguridad?: string | null;
+  errorMessage?: string | null;
+}
+
+function SimCaseRow({
+  c,
+  onDownload,
+  onRegenerate,
+}: {
+  c: SimCase;
+  onDownload: (caseId: string, encf: string, type: 'xml' | 'pdf') => void;
+  onRegenerate: (caseId: string) => void;
+}) {
+  const canDownload = c.estado === 'aceptado' || c.estado === 'manual';
+  const canRegenerate = c.estado === 'error' || c.estado === 'rechazado';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.5rem',
+      padding: '0.375rem 0.75rem', borderBottom: '1px solid var(--border)',
+      flexWrap: 'wrap', minHeight: 38,
+    }}>
+      <code style={{
+        fontSize: '0.72rem', color: 'var(--text)',
+        fontFamily: 'var(--font-mono, monospace)', minWidth: 140,
+      }}>
+        {c.encf}
+      </code>
+      <span style={{
+        fontSize: '0.68rem', color: 'var(--text-muted)',
+        background: 'var(--surface-alt, #f9f9f8)',
+        padding: '0.1rem 0.35rem', borderRadius: 3,
+        border: '1px solid var(--border)', flexShrink: 0,
+      }}>
+        {c.isRfce ? 'RFCE' : c.isManual ? 'Manual' : 'Auto'}
+      </span>
+      <span className={`badge ${SIM_ESTADO_BADGE[c.estado] ?? 'draft'}`} style={{ fontSize: '0.65rem', flexShrink: 0 }}>
+        {SIM_ESTADO_LABEL[c.estado] ?? c.estado}
+      </span>
+      {c.errorMessage && (
+        <span
+          style={{
+            fontSize: '0.72rem', color: '#dc2626', flex: 1,
+            overflow: 'hidden', textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap', minWidth: 0,
+          }}
+          title={c.errorMessage}
+        >
+          {c.errorMessage}
+        </span>
+      )}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+        {canDownload && (
+          <>
+            <button
+              className="btn"
+              style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
+              onClick={() => onDownload(c.id, c.encf, 'xml')}
+            >
+              XML
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
+              onClick={() => onDownload(c.id, c.encf, 'pdf')}
+            >
+              PDF
+            </button>
+          </>
+        )}
+        {canRegenerate && (
+          <button
+            className="btn"
+            style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
+            onClick={() => onRegenerate(c.id)}
+          >
+            Reintentar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function CertificacionTab({ company, onOpenTestSet }: Props) {
@@ -425,6 +530,13 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [facturasLoading, setFacturasLoading] = useState(true);
   const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(new Set());
   const checkedRITypesKey = `villarja_ri_types_${company.rnc}`;
+  const [simCases, setSimCases] = useState<SimCase[]>([]);
+  const [simInitialized, setSimInitialized] = useState(false);
+  const [simSerie, setSimSerie] = useState(0);
+  const [simLoading, setSimLoading] = useState(false);
+  const [simRunning, setSimRunning] = useState(false);
+  const [simError, setSimError] = useState('');
+  const simCancelRef = useRef(false);
 
   function toggleRIType(tipo: number) {
     setCheckedRITypes((prev) => {
@@ -589,6 +701,166 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
     }
   };
 
+  // ── Simulation (Step 4) ──
+  const fetchSimStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/certification/simulation/status', {
+        headers: { 'x-api-key': apiKey },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const data = (json as { data?: { initialized: boolean; serie: number; cases: SimCase[] } }).data ?? json;
+        setSimInitialized(data.initialized ?? false);
+        setSimSerie(data.serie ?? 0);
+        setSimCases(data.cases ?? []);
+      } else if (res.status === 404) {
+        setSimInitialized(false);
+        setSimSerie(0);
+        setSimCases([]);
+      }
+    } catch {
+      // keep defaults
+    }
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (selectedPaso === 4 && apiKey) {
+      fetchSimStatus();
+    }
+  }, [selectedPaso, apiKey, fetchSimStatus]);
+
+  const runSimulation = useCallback(async () => {
+    simCancelRef.current = false;
+    setSimRunning(true);
+    setSimError('');
+    try {
+      while (!simCancelRef.current) {
+        const res = await fetch('/api/certification/simulation/run-next', {
+          method: 'POST',
+          headers: { 'x-api-key': apiKey },
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setSimError((json as { error?: string }).error ?? `Error ${res.status} al ejecutar caso`);
+          break;
+        }
+        const { allDone, caseId, trackId } = json as { allDone?: boolean; caseId?: string; trackId?: string | null };
+        if (allDone) {
+          await fetchSimStatus();
+          break;
+        }
+        if (caseId && trackId) {
+          for (let attempt = 0; attempt < 12 && !simCancelRef.current; attempt++) {
+            await new Promise<void>((r) => setTimeout(r, 1500));
+            const ck = await fetch(`/api/certification/simulation/${caseId}/check`, {
+              method: 'POST',
+              headers: { 'x-api-key': apiKey },
+            });
+            const ckJson = await ck.json().catch(() => ({}));
+            const estado = (ckJson as { estado?: string }).estado;
+            if (estado && estado !== 'en_progreso') break;
+          }
+        }
+        await fetchSimStatus();
+      }
+    } catch (err) {
+      setSimError(err instanceof Error ? err.message : 'Error inesperado en simulación');
+    } finally {
+      setSimRunning(false);
+      await fetchSimStatus();
+    }
+  }, [apiKey, fetchSimStatus]);
+
+  const cancelSimulation = useCallback(() => {
+    simCancelRef.current = true;
+  }, []);
+
+  const handleInitAndRun = useCallback(async () => {
+    setSimLoading(true);
+    setSimError('');
+    try {
+      const res = await fetch('/api/certification/simulation/init', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSimError((json as { error?: string }).error ?? `Error ${res.status} al iniciar simulación`);
+        return;
+      }
+      const { cases, serie } = json as { cases?: SimCase[]; serie?: number };
+      setSimCases(cases ?? []);
+      setSimSerie(serie ?? 1);
+      setSimInitialized(true);
+    } catch (err) {
+      setSimError(err instanceof Error ? err.message : 'Error al iniciar simulación');
+      return;
+    } finally {
+      setSimLoading(false);
+    }
+    runSimulation();
+  }, [apiKey, runSimulation]);
+
+  const handleReset = useCallback(async () => {
+    setSimLoading(true);
+    setSimError('');
+    try {
+      const res = await fetch('/api/certification/simulation/reset', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+      });
+      if (res.ok) {
+        setSimCases([]);
+        setSimInitialized(false);
+        setSimSerie(0);
+      } else {
+        const json = await res.json().catch(() => ({}));
+        setSimError((json as { error?: string }).error ?? `Error ${res.status} al resetear`);
+      }
+    } catch (err) {
+      setSimError(err instanceof Error ? err.message : 'Error al resetear simulación');
+    } finally {
+      setSimLoading(false);
+    }
+  }, [apiKey]);
+
+  const regenerateSimCase = useCallback(async (caseId: string) => {
+    setSimError('');
+    try {
+      const res = await fetch(`/api/certification/simulation/${caseId}/regenerate`, {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSimError((json as { error?: string }).error ?? 'Error al regenerar caso');
+        return;
+      }
+      await fetchSimStatus();
+      runSimulation();
+    } catch (err) {
+      setSimError(err instanceof Error ? err.message : 'Error al regenerar caso');
+    }
+  }, [apiKey, fetchSimStatus, runSimulation]);
+
+  const downloadSimFile = useCallback(async (caseId: string, encf: string, type: 'xml' | 'pdf') => {
+    try {
+      const res = await fetch(`/api/certification/simulation/${caseId}/${type}`, {
+        headers: { 'X-API-Key': apiKey },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = `${encf}.${type}`;
+      a.click();
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      setSimError(err instanceof Error ? `Error al descargar ${type.toUpperCase()}: ${err.message}` : `Error al descargar ${type.toUpperCase()}`);
+    }
+  }, [apiKey]);
+
   const STATUS_DISPLAY: Record<string, { label: string; cls: string }> = {
     no_iniciada: { label: 'Sin iniciar',  cls: 'draft' },
     en_proceso:  { label: 'En proceso',   cls: 'info'  },
@@ -677,64 +949,185 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
           </>
         );
 
-      case 4:
+      case 4: {
+        const simDoneCount = simCases.filter((c) => c.estado === 'aceptado' || c.estado === 'manual').length;
+        const simAllDone = simCases.length > 0 && simDoneCount === simCases.length;
+        const simHasErrors = simCases.some((c) => c.estado === 'error' || c.estado === 'rechazado');
+        const simGrouped = ECF_TYPES_RI
+          .map(({ tipo, label }) => ({ tipo, label, cases: simCases.filter((c) => c.tipoEcf === tipo) }))
+          .filter((g) => g.cases.length > 0);
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Emite comprobantes con <strong>datos reales del emisor</strong> en certecf usando las secuencias propias del cliente. Esto valida el flujo completo: generación, firma y envío con el certificado INDOTEL del emisor.
+              Emite <strong>29 comprobantes de simulación</strong> con datos reales del emisor al ambiente <strong>certecf</strong>, usando las secuencias propias del cliente. Valida el flujo completo: generación, validación XSD, firma y envío con el certificado INDOTEL.
             </p>
             {!isCompleted(3, completed) && !isCompleted(4, completed) && (
               <AlertBox type="warning">
-                <strong>Prerequisito:</strong> Completa el Paso 3 — Pruebas de Aprobación Comercial antes de continuar con la simulación.
+                <strong>Prerequisito:</strong> Completa el Paso 3 — Pruebas de Aprobación Comercial antes de iniciar la simulación.
               </AlertBox>
             )}
-            <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.375rem', color: 'var(--text)' }}>
-              Comprobantes a emitir en certecf
-            </h4>
-            <div style={{ marginBottom: '0.875rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-              {[
-                { tipo: 31, label: 'Comprobante de Crédito Fiscal', required: true },
-                { tipo: 32, label: 'Factura de Consumo Electrónica (≥ RD$250K) / RFCE (< RD$250K)', required: true },
-                { tipo: 33, label: 'Nota de Débito', required: false },
-                { tipo: 34, label: 'Nota de Crédito', required: false },
-                { tipo: 41, label: 'Registro Único de Ingresos', required: false },
-                { tipo: 43, label: 'Régimen Especial', required: false },
-                { tipo: 44, label: 'Gubernamental', required: false },
-                { tipo: 45, label: 'Exportaciones', required: false },
-                { tipo: 46, label: 'Gastos Menores', required: false },
-                { tipo: 47, label: 'Regímenes Especiales de Producción', required: false },
-              ].map(({ tipo, label, required }, i, arr) => (
-                <div key={tipo} style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  padding: '0.375rem 0.75rem', fontSize: '0.8125rem',
-                  borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
-                  background: 'transparent',
-                }}>
-                  <span style={{
-                    fontFamily: 'var(--font-mono, monospace)', fontSize: '0.7rem',
-                    color: 'var(--text-muted)', minWidth: 24,
-                  }}>
-                    T{tipo}
-                  </span>
-                  <span style={{ flex: 1, color: 'var(--text)' }}>{label}</span>
-                  {required ? (
-                    <span className="badge err" style={{ fontSize: '0.65rem' }}>Requerido</span>
-                  ) : (
-                    <span className="badge draft" style={{ fontSize: '0.65rem' }}>Si aplica</span>
-                  )}
+
+            {simLoading && !simInitialized && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Cargando estado de simulación…</p>
+            )}
+
+            {!simInitialized && !simLoading && (
+              <>
+                <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.375rem', color: 'var(--text)' }}>
+                  Comprobantes a emitir — 29 en total
+                </h4>
+                <div style={{ marginBottom: '0.875rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                  {[
+                    { tipo: 31, label: 'Crédito Fiscal',      count: 4, note: '2 contado · 2 crédito' },
+                    { tipo: 32, label: 'Factura de Consumo',   count: 6, note: '2 ≥ RD$250K + 4 manual/RFCE' },
+                    { tipo: 33, label: 'Nota de Débito',       count: 1, note: 'referencia T32' },
+                    { tipo: 34, label: 'Nota de Crédito',      count: 2, note: 'referencia T41' },
+                    { tipo: 41, label: 'Compras',              count: 2, note: '' },
+                    { tipo: 43, label: 'Gastos Menores',       count: 2, note: '' },
+                    { tipo: 44, label: 'Regímenes Especiales', count: 2, note: '' },
+                    { tipo: 45, label: 'Gubernamental',        count: 2, note: '' },
+                    { tipo: 46, label: 'Exportaciones',        count: 2, note: '' },
+                    { tipo: 47, label: 'Pagos al Exterior',    count: 2, note: '' },
+                  ].map(({ tipo, label, count, note }, i, arr) => (
+                    <div key={tipo} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                      padding: '0.375rem 0.75rem', fontSize: '0.8125rem',
+                      borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: 24 }}>T{tipo}</span>
+                      <span style={{ flex: 1, color: 'var(--text)' }}>{label}</span>
+                      {note && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{note}</span>}
+                      <span className="badge draft" style={{ fontSize: '0.65rem', minWidth: 20, textAlign: 'center' }}>{count}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <InstructionList items={[
-              'Confirma que el emisor tiene secuencias activas para certecf (pestaña "Secuencias")',
-              'Ve al módulo de Facturas del cliente y crea al menos un Crédito Fiscal (T31)',
-              'Crea también una Factura de Consumo (T32) — ambos tipos son requeridos por la DGII',
-              'Si el emisor usará otros tipos, emite al menos uno de cada tipo marcado como "Si aplica"',
-              'Verifica que cada comprobante devuelva estado "aceptada" en certecf antes de continuar',
-            ]} />
+                <AlertBox type="info">
+                  El sistema generará y firmará automáticamente cada e-CF con las secuencias del emisor. Las Facturas de Consumo &lt; RD$250,000 se envían como <strong>RFCE</strong>; las &gt; RD$250,000 como e-CF completo.
+                </AlertBox>
+                {simError && <AlertBox type="error">{simError}</AlertBox>}
+                <button
+                  className="btn btn-primary"
+                  onClick={handleInitAndRun}
+                  disabled={blocked || simLoading || simRunning}
+                  style={{ fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  <Icon name="shield" size={16} />
+                  {simLoading ? 'Iniciando…' : 'Iniciar Simulación'}
+                </button>
+              </>
+            )}
+
+            {simInitialized && (
+              <>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap',
+                  padding: '0.625rem 0.875rem', marginBottom: '0.75rem',
+                  background: 'var(--surface-alt, #f9f9f8)', borderRadius: 8,
+                  border: '1px solid var(--border)', fontSize: '0.8125rem',
+                }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>Serie {simSerie}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>·</span>
+                  <span style={{ color: 'var(--text)' }}>{simDoneCount}/{simCases.length} completados</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {simRunning ? (
+                      <button
+                        className="btn"
+                        style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                        onClick={cancelSimulation}
+                      >
+                        Cancelar
+                      </button>
+                    ) : !simAllDone ? (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                        onClick={runSimulation}
+                        disabled={simLoading}
+                      >
+                        <Icon name="refresh" size={13} />
+                        Continuar
+                      </button>
+                    ) : null}
+                    <button
+                      className="btn"
+                      style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                      onClick={handleReset}
+                      disabled={simRunning || simLoading}
+                      title="Eliminar esta serie e iniciar una nueva"
+                    >
+                      Nueva Serie
+                    </button>
+                  </div>
+                </div>
+
+                {simRunning && (
+                  <AlertBox type="info">
+                    <strong>Enviando comprobantes…</strong> El proceso está en curso. Puedes cancelar en cualquier momento sin perder los casos ya enviados.
+                  </AlertBox>
+                )}
+
+                {simError && <AlertBox type="error">{simError}</AlertBox>}
+
+                {simAllDone && (
+                  <AlertBox type="success">
+                    <strong>¡Todos los comprobantes fueron aceptados!</strong> Descarga los PDFs desde cada fila y cárgalos al portal certecf para el Paso 5.
+                    {!isCompleted(4, completed) && (
+                      <div style={{ marginTop: '0.625rem' }}>
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                          onClick={() => markStep(4, 'complete')}
+                          disabled={marking}
+                        >
+                          <Icon name="checkcircle" size={14} />
+                          {marking ? 'Guardando…' : 'Marcar Paso 4 completado'}
+                        </button>
+                      </div>
+                    )}
+                  </AlertBox>
+                )}
+
+                {simHasErrors && !simRunning && (
+                  <AlertBox type="warning">
+                    Algunos comprobantes tienen errores. Usa <strong>Reintentar</strong> en las filas afectadas, o <strong>Nueva Serie</strong> si el error persiste.
+                  </AlertBox>
+                )}
+
+                {simGrouped.length > 0 && (
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginBottom: '0.75rem' }}>
+                    {simGrouped.map(({ tipo, label, cases: typeCases }) => (
+                      <div key={tipo}>
+                        <div style={{
+                          padding: '0.375rem 0.75rem',
+                          background: 'var(--surface-alt, #f9f9f8)',
+                          borderBottom: '1px solid var(--border)',
+                          display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        }}>
+                          <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: 24 }}>T{tipo}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                            {typeCases.filter((c) => c.estado === 'aceptado' || c.estado === 'manual').length}/{typeCases.length}
+                          </span>
+                        </div>
+                        {typeCases.map((c) => (
+                          <SimCaseRow
+                            key={c.id}
+                            c={c}
+                            onDownload={downloadSimFile}
+                            onRegenerate={regenerateSimCase}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
+      }
 
       case 5:
         return (
