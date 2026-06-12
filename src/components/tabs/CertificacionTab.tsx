@@ -442,7 +442,9 @@ function SimCaseRow({
   onRegenerate: (caseId: string) => void;
 }) {
   const canDownload = c.estado === 'aceptado' || c.estado === 'manual';
-  const canRegenerate = c.estado === 'error' || c.estado === 'rechazado';
+  // Allow regenerating any non-manual case (re-runs ECF generation with latest company data)
+  const canRegenerate = !c.isManual;
+  const regenerarLabel = c.estado === 'error' || c.estado === 'rechazado' ? 'Reintentar' : 'Regenerar';
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -503,7 +505,7 @@ function SimCaseRow({
             style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
             onClick={() => onRegenerate(c.id)}
           >
-            Reintentar
+            {regenerarLabel}
           </button>
         )}
       </div>
