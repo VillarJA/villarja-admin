@@ -4,7 +4,7 @@ export type CompanyEstado = 'Activo' | 'Suspendido' | 'Pendiente';
 interface CompanyInsertInput {
   rnc: string;
   razonSocial: string;
-  alias: string;
+  alias?: string;
   plan: CompanyPlan;
   ambiente: string;
   direccion?: string;
@@ -48,7 +48,7 @@ export function buildModernCompanyInsertPayload(input: CompanyInsertInput, apiKe
   return {
     rnc: input.rnc,
     razon_social: input.razonSocial,
-    nombre_comercial: input.alias,
+    nombre_comercial: input.alias ?? null,
     plan: input.plan,
     estado: 'Pendiente',
     ambiente: input.ambiente,
@@ -70,7 +70,7 @@ export function buildLegacyCompanyInsertPayload(
   return {
     rnc: input.rnc,
     razon_social: input.razonSocial,
-    nombre_comercial: input.alias,
+    nombre_comercial: input.alias ?? null,
     direccion: input.direccion || 'Pendiente de completar',
     plan: toLegacyPlan(input.plan),
     ambiente: toLegacyAmbiente(input.ambiente),

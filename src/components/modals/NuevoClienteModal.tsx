@@ -50,15 +50,10 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
         setPadronActividad(result.actividad);
         // Auto-fill only if fields are empty (don't overwrite manual input)
         if (!razon) setRazon(result.nombre);
-        if (!alias) {
-          const source = result.nombreComercial || result.nombre;
-          setAlias(
-            source
-              .split(/\s+/)
-              .map((w) => w.slice(0, 4).toUpperCase())
-              .join('')
-              .slice(0, 20)
-          );
+        // Use the DGII-registered trade name only — never abbreviate the legal name,
+        // as that produces internal codes (e.g. "ELIZRODRDEDAVI") that appear on invoices.
+        if (!alias && result.nombreComercial) {
+          setAlias(result.nombreComercial);
         }
       } else {
         setPadronStatus('notfound');
@@ -69,8 +64,8 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rnc.trim() || !razon.trim() || !alias.trim()) {
-      setError('RNC, razón social y alias son requeridos.');
+    if (!rnc.trim() || !razon.trim()) {
+      setError('RNC y razón social son requeridos.');
       return;
     }
     if (!direccion.trim()) {
@@ -83,7 +78,7 @@ export function NuevoClienteModal({ onClose, onCreated }: Props) {
       const company = await createCompany({
         rnc: rnc.trim(),
         razonSocial: razon.trim(),
-        alias: alias.trim().toUpperCase(),
+        alias: alias.trim() || undefined,
         plan,
         ambiente: amb,
         direccion: direccion.trim(),

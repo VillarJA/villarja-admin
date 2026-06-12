@@ -574,7 +574,7 @@ export async function getPlanes(): Promise<PlanStat[]> {
 export interface CreateCompanyInput {
   rnc: string;
   razonSocial: string;
-  alias: string;
+  alias?: string;
   plan: Company['plan'];
   ambiente: string;
   direccion?: string;
