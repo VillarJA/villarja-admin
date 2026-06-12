@@ -530,7 +530,17 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [facturasLoading, setFacturasLoading] = useState(true);
-  const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(new Set());
+  const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const cached = window.localStorage.getItem(`villarja_ri_types_${company.rnc}`);
+      if (!cached) return new Set();
+      const parsed = JSON.parse(cached) as number[];
+      return new Set(parsed.filter((value) => Number.isInteger(value)));
+    } catch {
+      return new Set();
+    }
+  });
   const checkedRITypesKey = `villarja_ri_types_${company.rnc}`;
   const [simCases, setSimCases] = useState<SimCase[]>([]);
   const [simInitialized, setSimInitialized] = useState(false);
@@ -550,29 +560,32 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
 
   const apiKey = company.apiKey ?? '';
 
-  // ── Fetch progress from API ──
-  const fetchProgress = useCallback(async () => {
-    try {
-      const res = await fetch('/api/certification/progress', {
-        headers: { 'x-api-key': apiKey },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const data: ProgressData = json.data ?? json;
-        setProgress(data);
-        const firstPending = CERT_STEPS.find((s) => !data.completedSteps.includes(s.paso));
-        if (firstPending) setSelectedPaso(firstPending.paso);
-      }
-    } catch {
-      // keep defaults — API not available in demo mode
-    } finally {
-      setLoading(false);
-    }
-  }, [apiKey]);
-
   useEffect(() => {
-    fetchProgress();
-  }, [fetchProgress]);
+    let cancelled = false;
+
+    async function loadProgress() {
+      try {
+        const res = await fetch('/api/certification/progress', {
+          headers: { 'x-api-key': apiKey },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const data: ProgressData = json.data ?? json;
+          if (cancelled) return;
+          setProgress(data);
+          const firstPending = CERT_STEPS.find((s) => !data.completedSteps.includes(s.paso));
+          if (firstPending) setSelectedPaso(firstPending.paso);
+        }
+      } catch {
+        // keep defaults — API not available in demo mode
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadProgress();
+    return () => { cancelled = true; };
+  }, [apiKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -590,17 +603,6 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
     loadFacturas();
     return () => { cancelled = true; };
   }, [company.id]);
-
-  useEffect(() => {
-    try {
-      const cached = localStorage.getItem(checkedRITypesKey);
-      if (!cached) return;
-      const parsed = JSON.parse(cached) as number[];
-      setCheckedRITypes(new Set(parsed.filter((value) => Number.isInteger(value))));
-    } catch {
-      // ignore localStorage parsing failures
-    }
-  }, [checkedRITypesKey]);
 
   useEffect(() => {
     try {
@@ -726,10 +728,36 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   }, [apiKey]);
 
   useEffect(() => {
-    if ((selectedPaso === 4 || selectedPaso === 5) && apiKey) {
-      fetchSimStatus();
+    if (selectedPaso !== 4 && selectedPaso !== 5) return;
+    if (!apiKey) return;
+
+    let cancelled = false;
+
+    async function loadSimulationStatus() {
+      try {
+        const res = await fetch('/api/certification/simulation/status', {
+          headers: { 'x-api-key': apiKey },
+        });
+        if (cancelled) return;
+        if (res.ok) {
+          const json = await res.json();
+          const data = (json as { data?: { initialized: boolean; serie: number; cases: SimCase[] } }).data ?? json;
+          setSimInitialized(data.initialized ?? false);
+          setSimSerie(data.serie ?? 0);
+          setSimCases(data.cases ?? []);
+        } else if (res.status === 404) {
+          setSimInitialized(false);
+          setSimSerie(0);
+          setSimCases([]);
+        }
+      } catch {
+        // keep defaults
+      }
     }
-  }, [selectedPaso, apiKey, fetchSimStatus]);
+
+    void loadSimulationStatus();
+    return () => { cancelled = true; };
+  }, [selectedPaso, apiKey]);
 
   const runSimulation = useCallback(async () => {
     simCancelRef.current = false;
@@ -1146,6 +1174,14 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
 
       case 5: {
         const simReady = simCases.filter((c) => c.estado === 'aceptado' || c.estado === 'manual');
+        const simReadyGrouped = ECF_TYPES_RI
+          .map(({ tipo, label }) => ({ tipo, label, cases: simReady.filter((c) => c.tipoEcf === tipo) }))
+          .filter((group) => group.cases.length > 0);
+        const riFacturasGrouped = ECF_TYPES_RI
+          .map(({ tipo, label }) => ({ tipo, label, facturas: riFacturas.filter((factura) => factura.tipo === tipo) }))
+          .filter((group) => group.facturas.length > 0);
+        const hasLowValueT32 = simReady.some((c) => c.tipoEcf === 32 && (c.isRfce || c.isManual))
+          || riFacturas.some((factura) => factura.tipo === 32 && factura.total < 250000);
         const missingStep5Types = simReady.length > 0
           ? [31, 32].filter((tipo) => !simReady.some((c) => c.tipoEcf === tipo))
           : missingSimulationTypes;
@@ -1162,6 +1198,13 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
             <AlertBox type="info">
               Las representaciones impresas deben estar en <strong>PDF</strong> (máx. 10 MB por carga). Deben reflejar: e-NCF, RNCs, fecha, montos, código de seguridad y código QR.
             </AlertBox>
+            {hasLowValueT32 && (
+              <AlertBox type="info">
+                <strong>Nota DGII para T32 &lt; RD$250,000:</strong> la documentación oficial indica que el QR de estas representaciones consulta <strong>ConsultaTimbreFC</strong> del
+                <strong> RFCE</strong>. Si el timbre responde <strong>&quot;No fue encontrada la factura (e-CF)&quot;</strong>, hay que validar que el <strong>Código de Seguridad</strong> del PDF
+                corresponda al RFCE aceptado por la DGII.
+              </AlertBox>
+            )}
 
             {simReady.length > 0 ? (
               <div style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -1171,29 +1214,45 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                     Descarga cada PDF y súbelo al portal DGII en Representaciones Impresas.
                   </div>
                 </div>
-                {simReady.map((c) => (
-                  <div key={c.id} style={{
-                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                    padding: '0.375rem 0.75rem', borderBottom: '1px solid var(--border)',
-                    flexWrap: 'wrap', minHeight: 38,
-                  }}>
-                    <code style={{ fontSize: '0.72rem', color: 'var(--text)', fontFamily: 'var(--font-mono, monospace)', minWidth: 140 }}>
-                      {c.encf}
-                    </code>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', background: 'var(--surface-alt, #f9f9f8)', padding: '0.1rem 0.35rem', borderRadius: 3, border: '1px solid var(--border)', flexShrink: 0 }}>
-                      T{c.tipoEcf}
-                    </span>
-                    <span className="badge ok" style={{ fontSize: '0.65rem', flexShrink: 0 }}>
-                      {c.isRfce ? 'RFCE' : c.isManual ? 'Manual' : 'Aceptado'}
-                    </span>
-                    <button
-                      className="btn btn-primary"
-                      style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '0.25rem 0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
-                      onClick={() => downloadSimFile(c.id, c.encf, 'pdf')}
-                    >
-                      <Icon name="file" size={12} />
-                      PDF
-                    </button>
+                {simReadyGrouped.map(({ tipo, label, cases }) => (
+                  <div key={tipo}>
+                    <div style={{
+                      padding: '0.375rem 0.75rem',
+                      background: 'var(--surface-alt, #f9f9f8)',
+                      borderTop: '1px solid var(--border)',
+                      borderBottom: '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: 24 }}>T{tipo}</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                        {cases.length} PDF{cases.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    {cases.map((c) => (
+                      <div key={c.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        padding: '0.375rem 0.75rem', borderBottom: '1px solid var(--border)',
+                        flexWrap: 'wrap', minHeight: 38,
+                      }}>
+                        <code style={{ fontSize: '0.72rem', color: 'var(--text)', fontFamily: 'var(--font-mono, monospace)', minWidth: 140 }}>
+                          {c.encf}
+                        </code>
+                        <span className="badge ok" style={{ fontSize: '0.65rem', flexShrink: 0 }}>
+                          {c.isRfce ? 'RFCE' : c.isManual ? 'Manual' : 'Aceptado'}
+                        </span>
+                        <button
+                          className="btn btn-primary"
+                          style={{ marginLeft: 'auto', fontSize: '0.7rem', padding: '0.25rem 0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
+                          onClick={() => downloadSimFile(c.id, c.encf, 'pdf')}
+                        >
+                          <Icon name="file" size={12} />
+                          PDF
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -1207,13 +1266,32 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                     Descarga estos archivos y súbelos al portal DGII en la sección de Representaciones Impresas.
                   </div>
                 </div>
-                {riFacturas.map((factura) => (
-                  <FacturaEvidenceRow
-                    key={factura.id}
-                    factura={factura}
-                    onDownloadXml={(current) => downloadEcfFile(current, 'xml')}
-                    onDownloadPdf={(current) => downloadEcfFile(current, 'pdf')}
-                  />
+                {riFacturasGrouped.map(({ tipo, label, facturas }) => (
+                  <div key={tipo}>
+                    <div style={{
+                      padding: '0.375rem 0.75rem',
+                      background: 'var(--surface-alt, #f9f9f8)',
+                      borderTop: '1px solid var(--border)',
+                      borderBottom: '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.7rem', color: 'var(--text-muted)', minWidth: 24 }}>T{tipo}</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>{label}</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                        {facturas.length} PDF{facturas.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    {facturas.map((factura) => (
+                      <FacturaEvidenceRow
+                        key={factura.id}
+                        factura={factura}
+                        onDownloadXml={(current) => downloadEcfFile(current, 'xml')}
+                        onDownloadPdf={(current) => downloadEcfFile(current, 'pdf')}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -1318,7 +1396,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
             </AlertBox>
             {!company.cert && (
               <AlertBox type="error">
-                No hay certificado digital cargado para este emisor. Carga el certificado .p12 desde el botón "Certificado Digital" antes de continuar.
+                No hay certificado digital cargado para este emisor. Carga el certificado .p12 desde el botón &quot;Certificado Digital&quot; antes de continuar.
               </AlertBox>
             )}
             <InstructionList items={[
@@ -1414,7 +1492,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
               La DGII envía <strong>Aprobaciones Comerciales (ACECF)</strong> de prueba al endpoint de aprobaciones del emisor para verificar que el servicio procesa correctamente las respuestas inbound.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa las ACECF inbound en tiempo real. Las entradas de tipo "aprobación" aparecen en la pestaña Recepciones.
+              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa las ACECF inbound en tiempo real. Las entradas de tipo &quot;aprobación&quot; aparecen en la pestaña Recepciones.
             </AlertBox>
             <URLCard label="URL Aprobación Comercial activa (certecf)" url={SERVICE_URLS.aprobacion} />
             <InstructionList items={[
