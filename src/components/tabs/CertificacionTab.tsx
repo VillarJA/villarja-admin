@@ -1066,11 +1066,15 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                   </AlertBox>
                 )}
 
-                {simError && <AlertBox type="error">{simError}</AlertBox>}
+                {simError && !simAllDone && <AlertBox type="error">{simError}</AlertBox>}
 
                 {simAllDone && (
                   <AlertBox type="success">
-                    <strong>¡Todos los comprobantes fueron aceptados!</strong> Descarga los PDFs desde cada fila y cárgalos al portal certecf para el Paso 5.
+                    <strong>¡Todos los comprobantes fueron aceptados!</strong>
+                    <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem', fontSize: '0.82rem', lineHeight: 1.7 }}>
+                      <li><strong>Facturas de consumo manuales (E32 &lt; 250k):</strong> descarga el <strong>XML</strong> de cada una desde la tabla y súbelo al portal certecf.</li>
+                      <li><strong>Todos los comprobantes:</strong> descarga el <strong>PDF</strong> desde cada fila — son las representaciones impresas para el <strong>Paso 5</strong>.</li>
+                    </ul>
                     {!isCompleted(4, completed) && (
                       <div style={{ marginTop: '0.625rem' }}>
                         <button
@@ -1085,6 +1089,28 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                       </div>
                     )}
                   </AlertBox>
+                )}
+
+                {simAllDone && simCases.some((c) => c.isManual) && (
+                  <div style={{ border: '2px solid var(--brand)', borderRadius: 8, overflow: 'hidden', marginBottom: '0.75rem' }}>
+                    <div style={{ padding: '0.5rem 0.75rem', background: 'color-mix(in srgb, var(--brand) 8%, var(--surface))', borderBottom: '1px solid var(--brand)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Icon name="file" size={14} />
+                      <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text)' }}>Facturas de Consumo manuales — sube el XML al portal certecf</span>
+                    </div>
+                    {simCases.filter((c) => c.isManual).map((c) => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.375rem 0.75rem', borderBottom: '1px solid var(--border)' }}>
+                        <code style={{ fontSize: '0.72rem', flex: 1, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)' }}>{c.encf}</code>
+                        <button
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.72rem', padding: '0.25rem 0.65rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
+                          onClick={() => downloadSimFile(c.id, c.encf, 'xml')}
+                        >
+                          <Icon name="file" size={12} />
+                          Descargar XML
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
 
                 {simHasErrors && !simRunning && (
