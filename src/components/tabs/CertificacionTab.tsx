@@ -875,8 +875,9 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
 
   const downloadSimFile = useCallback(async (caseId: string, encf: string, type: 'xml' | 'pdf') => {
     try {
-      const res = await fetch(`/api/certification/simulation/${caseId}/${type}`, {
+      const res = await fetch(`/api/certification/simulation/${caseId}/${type}?ts=${Date.now()}`, {
         headers: { 'X-API-Key': apiKey },
+        cache: 'no-store',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
