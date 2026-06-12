@@ -1075,19 +1075,6 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                       <li><strong>Facturas de consumo manuales (E32 &lt; 250k):</strong> descarga el <strong>XML</strong> de cada una desde la tabla y súbelo al portal certecf.</li>
                       <li><strong>Todos los comprobantes:</strong> descarga el <strong>PDF</strong> desde cada fila — son las representaciones impresas para el <strong>Paso 5</strong>.</li>
                     </ul>
-                    {!isCompleted(4, completed) && (
-                      <div style={{ marginTop: '0.625rem' }}>
-                        <button
-                          className="btn btn-primary"
-                          style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-                          onClick={() => markStep(4, 'complete')}
-                          disabled={marking}
-                        >
-                          <Icon name="checkcircle" size={14} />
-                          {marking ? 'Guardando…' : 'Marcar Paso 4 completado'}
-                        </button>
-                      </div>
-                    )}
                   </AlertBox>
                 )}
 
