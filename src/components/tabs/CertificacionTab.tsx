@@ -883,7 +883,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   };
 
   useEffect(() => {
-    if (selectedPaso !== 8) return;
+    if (selectedPaso !== 8 && selectedPaso !== 10) return;
     const timer = window.setTimeout(() => {
       void fetchDgiiRootCertificate();
     }, 0);
@@ -1814,11 +1814,27 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
               Una vez validada la recepción de e-CF, debes <strong>indicar a la DGII</strong> que el receptor está listo para la prueba de <strong>Aprobaciones Comerciales (ACECF)</strong>.
             </p>
+            {dgiiRootCertLoading ? (
+              <AlertBox type="info">
+                Verificando certificado raíz DGII cargado para reutilizarlo en esta etapa…
+              </AlertBox>
+            ) : dgiiRootCert.exists ? (
+              <AlertBox type="success">
+                El certificado raíz DGII ya está cargado y se reutiliza en este paso.
+                {dgiiRootCert.certificate?.fileName ? ` Archivo activo: ${dgiiRootCert.certificate.fileName}.` : ''}
+                {' '}No necesitas subirlo de nuevo.
+              </AlertBox>
+            ) : (
+              <AlertBox type="warning">
+                No encontramos un certificado raíz DGII cargado. Lo ideal es volver al Paso 8 y subirlo una sola vez antes de continuar con aprobaciones comerciales.
+              </AlertBox>
+            )}
             <AlertBox type="success">
               <strong>Automático:</strong> la DGII enviará ACECF de prueba al endpoint registrado y Villar JA las procesará en el receptor centralizado. El resultado se verifica en el Paso 11.
             </AlertBox>
             <InstructionList items={[
               'En el portal DGII, selecciona la opción para iniciar la prueba de aprobaciones comerciales',
+              'No vuelvas a subir el certificado raíz si ya quedó cargado en el Paso 8; este paso reutiliza la misma configuración',
               'Confirma que las URLs del Paso 7 siguen iguales y que el certificado del emisor continúa vigente',
               'Guarda el cambio en DGII y espera el envío de ACECF de prueba',
               'Marca este paso cuando DGII confirme que la prueba ya fue iniciada',
