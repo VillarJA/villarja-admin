@@ -7,10 +7,9 @@ export async function POST(req: NextRequest) {
   if (!key) return NextResponse.json({ error: 'API key requerida' }, { status: 400 });
 
   try {
-    const upstream = await fetch(`${ECF_BASE}/api/v1/test-firma`, {
+    const upstream = await fetch(`${ECF_BASE}/api/v1/test-firma-stored`, {
       method: 'POST',
-      headers: { 'X-API-Key': key, 'Content-Type': 'application/json' },
-      body: '{}',
+      headers: { 'X-API-Key': key },
     });
     const body = await upstream.json().catch(() => ({}));
     return NextResponse.json(body, { status: upstream.status });
