@@ -56,8 +56,8 @@ const CERT_STEPS: StepConfig[] = [
   { paso: 11, titulo: 'Recepción de aprobaciones comerciales', descripcion: 'Confirmar que el endpoint procesa ACECF inbound enviados por la DGII',         tipo: 'hybrid'    },
   { paso: 12, titulo: 'URLs de servicio — producción',      descripcion: 'Registrar las 4 URLs de producción en el portal DGII',                         tipo: 'hybrid'    },
   { paso: 13, titulo: 'Declaración Jurada',                 descripcion: 'Firmar y enviar la Declaración Jurada al portal DGII',                         tipo: 'manual'    },
-  { paso: 14, titulo: 'Verificación tributaria',            descripcion: 'Confirmar que el contribuyente está al día con la DGII',                       tipo: 'manual'    },
-  { paso: 15, titulo: 'Activación en producción',           descripcion: 'La DGII activa el ambiente de producción del emisor',                          tipo: 'manual'    },
+  { paso: 14, titulo: 'Verificación Estatus',               descripcion: 'La DGII verifica estatus tributario, acceso Virtual Office y representante legal — sin acción requerida del emisor', tipo: 'manual'    },
+  { paso: 15, titulo: 'Activación en producción',           descripcion: 'La DGII habilita el ambiente de producción tras superar los 14 pasos de certecf — no es un paso del portal DGII', tipo: 'manual'    },
 ];
 
 const TIPO_LABEL: Record<StepTipo, string> = {
@@ -82,6 +82,15 @@ interface ProgressData {
 
 interface TestFirmaResult {
   ok: boolean;
+  message: string;
+}
+
+interface UrlCheckResult {
+  key: string;
+  label: string;
+  url: string;
+  ok: boolean;
+  status: number;
   message: string;
 }
 
@@ -528,6 +537,8 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [showAprobacion, setShowAprobacion] = useState(false);
   const [testFirmaResult, setTestFirmaResult] = useState<TestFirmaResult | null>(null);
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
+  const [urlValidation, setUrlValidation] = useState<UrlCheckResult[]>([]);
+  const [urlValidating, setUrlValidating] = useState(false);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [facturasLoading, setFacturasLoading] = useState(true);
   const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(() => {
@@ -668,6 +679,28 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
       });
     } finally {
       setTestFirmaLoading(false);
+    }
+  };
+
+  // ── Validate service URLs (Paso 7) ──
+  const handleValidateUrls = async () => {
+    setUrlValidating(true);
+    setUrlValidation([]);
+    try {
+      const res = await fetch('/api/certification/validate-urls', { method: 'POST' });
+      const json = await res.json() as { results: UrlCheckResult[] };
+      setUrlValidation(json.results ?? []);
+    } catch (err) {
+      setUrlValidation([{
+        key: 'error',
+        label: 'Error de red',
+        url: '',
+        ok: false,
+        status: 0,
+        message: err instanceof Error ? err.message : 'No se pudo contactar el servidor',
+      }]);
+    } finally {
+      setUrlValidating(false);
     }
   };
 
@@ -1363,7 +1396,15 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
           </>
         );
 
-      case 7:
+      case 7: {
+        const allUrlsOk = urlValidation.length > 0 && urlValidation.every((r) => r.ok);
+        const urlResultMap = Object.fromEntries(urlValidation.map((r) => [r.key, r]));
+        const URL_KEYS: { key: string; label: string; url: string }[] = [
+          { key: 'semilla',    label: 'Autenticación — Semilla',                    url: SERVICE_URLS.autenticacion },
+          { key: 'token',      label: 'Autenticación — Token / ValidacionCertificado', url: SERVICE_URLS.token },
+          { key: 'recepcion',  label: 'Recepción de e-CF',                          url: SERVICE_URLS.recepcion },
+          { key: 'aprobacion', label: 'Aprobación Comercial',                       url: SERVICE_URLS.aprobacion },
+        ];
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
@@ -1372,11 +1413,49 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
             <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, margin: '0.875rem 0 0.625rem', color: 'var(--text)' }}>
               URLs a registrar en el portal DGII (certecf)
             </h4>
-            <URLCard label="Autenticación — Semilla" url={SERVICE_URLS.autenticacion} />
-            <URLCard label="Autenticación — Token" url={SERVICE_URLS.token} />
-            <URLCard label="Recepción de e-CF" url={SERVICE_URLS.recepcion} />
-            <URLCard label="Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
+
+            {URL_KEYS.map(({ key, label, url }) => {
+              const result = urlResultMap[key];
+              return (
+                <div key={key}>
+                  <URLCard label={label} url={url} />
+                  {result && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      margin: '-0.375rem 0 0.75rem 0.25rem',
+                      fontSize: '0.75rem',
+                      color: result.ok ? '#15803d' : '#dc2626',
+                    }}>
+                      <Icon name={result.ok ? 'check' : 'x'} size={13} style={{ flexShrink: 0 }} />
+                      {result.message}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.875rem' }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleValidateUrls}
+                disabled={urlValidating || blocked}
+                style={{ fontSize: '0.875rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                {urlValidating
+                  ? 'Validando…'
+                  : <><Icon name="shield" size={15} />Validar URLs</>}
+              </button>
+              {allUrlsOk && (
+                <span style={{ fontSize: '0.8125rem', color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" size={14} />Todos los servicios responden
+                </span>
+              )}
+            </div>
+
             <InstructionList items={[
+              'Usa "Validar URLs" para confirmar que los 4 servicios responden correctamente',
               'Ve al portal DGII → "Configuración de URLs de Servicio" en el ambiente certecf',
               'Ingresa las 4 URLs mostradas arriba en sus campos correspondientes',
               'Guarda los cambios y confirma que la DGII las acepta sin errores',
@@ -1385,6 +1464,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
+      }
 
       case 8:
         return (
@@ -1534,13 +1614,16 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Firma y envía la <strong>Declaración Jurada de Cumplimiento</strong> al portal DGII. Este documento certifica que el emisor cumple con todos los requisitos técnicos y legales de la facturación electrónica.
+              Firma y envía la <strong>Declaración Jurada de Cumplimiento</strong> al portal DGII. Este documento XML certifica que el emisor cumple con todos los requisitos técnicos y legales de la facturación electrónica.
             </p>
+            <AlertBox type="info">
+              La firma se realiza sobre un XML que descarga el portal DGII — contiene RNC, representante legal y cláusulas de cumplimiento. Debe firmarse con la <strong>herramienta de firma de la DGII</strong> usando el certificado digital X.509 del emisor.
+            </AlertBox>
             <InstructionList items={[
               'Ve al portal DGII → sección "Declaración Jurada" o "Cumplimiento"',
-              'Lee detenidamente el contenido del documento de declaración jurada',
-              'Firma electrónicamente usando el certificado digital INDOTEL del emisor',
-              'Envía el documento firmado y guarda el número de confirmación asignado por la DGII',
+              'Descarga el XML de declaración jurada generado por el portal (incluye RNC y datos del representante legal)',
+              'Firma el XML usando la herramienta de firma digital proporcionada por la DGII y el certificado .p12 del emisor',
+              'Sube el XML firmado al portal DGII y guarda el número de confirmación asignado',
             ]} />
             <DGIIPortalLink />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
@@ -1551,13 +1634,17 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII verifica que el contribuyente está <strong>al día con sus obligaciones tributarias</strong> antes de activar el ambiente de producción.
+              La DGII realiza una <strong>Verificación de Estatus</strong> completa antes de habilitar la producción. Este paso es <em>automático por parte de la DGII</em> — no requiere acción directa del emisor, pero sí que todo esté en orden.
             </p>
+            <AlertBox type="info">
+              La DGII verifica 4 condiciones: (1) estatus tributario vigente, (2) acceso a la Oficina Virtual, (3) autorización fiscal activa, y (4) representante legal registrado. Si alguna falla, la certificación queda suspendida hasta regularizar.
+            </AlertBox>
             <InstructionList items={[
-              'Verifica que el RNC del emisor esté activo en el padrón de contribuyentes de la DGII',
-              'Confirma que no hay declaraciones pendientes ni deudas tributarias',
-              'Si hay incumplimientos, el emisor debe regularizarlos antes de continuar con la certificación',
-              'La DGII puede verificar esto automáticamente — confirma el estado con ellos directamente',
+              'Confirma que el RNC esté activo en el padrón de contribuyentes de la DGII',
+              'Verifica que la Oficina Virtual del emisor tenga credenciales válidas y activas',
+              'Asegúrate de que no hay declaraciones ni deudas fiscales pendientes',
+              'Confirma con la DGII que el representante legal registrado en el portal coincide con el de la empresa',
+              'Espera la notificación de la DGII — no hay nada que subir ni firmar en este paso',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -1591,8 +1678,11 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         ) : (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Tras completar todos los pasos anteriores, la DGII <strong>activa el ambiente de producción</strong> del emisor. Una vez activado, puede emitir comprobantes reales.
+              Tras superar los 14 pasos del portal certecf, la DGII <strong>habilita el ambiente de producción</strong> del emisor. No es un paso del portal DGII — es el resultado de completar todos los anteriores.
             </p>
+            <AlertBox type="info">
+              El portal certecf de la DGII tiene 14 pasos oficiales. Este paso 15 es una confirmación interna — la DGII activa producción automáticamente tras la Verificación de Estatus del Paso 14.
+            </AlertBox>
             <InstructionList items={[
               'Espera la confirmación oficial de la DGII de que el ambiente ecf ha sido activado',
               'Cambia el ambiente del emisor a "ecf" desde el botón "Cambiar Ambiente"',

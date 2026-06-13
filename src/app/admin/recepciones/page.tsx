@@ -75,10 +75,9 @@ export default function RecepcionesPage() {
   };
 
   const handleVerXml = async (r: Recepcion) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
-    const token    = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
     try {
-      const res = await fetch(`${API_BASE}/admin/recepciones/${r.id}/xml`, {
+      const res = await fetch(`/api/admin/recepciones/${r.id}/xml`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
