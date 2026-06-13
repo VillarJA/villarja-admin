@@ -4,30 +4,39 @@ const ECF_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
 export const dynamic = 'force-dynamic';
 
+// Actual routes in villarja-ecf-api receptor.ts:
+//   GET  /fe/autenticacion/api/semilla               → returns <SemillaModel> XML
+//   POST /fe/autenticacion/api/validacioncertificado → requires signed XML body
+//   POST /fe/recepcion/api/ecf                       → requires signed e-CF XML body
+//   POST /fe/aprobacioncomercial/api/ecf             → requires signed ACECF XML body
 const CHECKS = [
   {
     key: 'semilla',
     label: 'Autenticación — Semilla',
     url: `${ECF_BASE}/fe/autenticacion/api/semilla`,
-    expectXml: true,
+    method: 'GET' as const,
+    xmlTag: 'SemillaModel',
   },
   {
-    key: 'token',
-    label: 'Autenticación — Token / ValidacionCertificado',
-    url: `${ECF_BASE}/fe/autenticacion/api/token`,
-    expectXml: false,
+    key: 'validacion',
+    label: 'Autenticación — ValidacionCertificado',
+    url: `${ECF_BASE}/fe/autenticacion/api/validacioncertificado`,
+    method: 'POST' as const,
+    xmlTag: null,
   },
   {
     key: 'recepcion',
     label: 'Recepción de e-CF',
     url: `${ECF_BASE}/fe/recepcion/api/ecf`,
-    expectXml: false,
+    method: 'POST' as const,
+    xmlTag: null,
   },
   {
     key: 'aprobacion',
     label: 'Aprobación Comercial',
     url: `${ECF_BASE}/fe/aprobacioncomercial/api/ecf`,
-    expectXml: false,
+    method: 'POST' as const,
+    xmlTag: null,
   },
 ] as const;
 
@@ -42,38 +51,40 @@ export interface UrlCheckResult {
 
 export async function POST() {
   const results = await Promise.all(
-    CHECKS.map(async ({ key, label, url, expectXml }): Promise<UrlCheckResult> => {
+    CHECKS.map(async ({ key, label, url, method, xmlTag }): Promise<UrlCheckResult> => {
       try {
         const res = await fetch(url, {
-          method: 'GET',
+          method,
           signal: AbortSignal.timeout(8000),
           headers: { Accept: 'application/xml, text/xml, */*' },
         });
 
-        // Any non-5xx response means the service is reachable
-        let ok = res.status < 500;
+        let ok = false;
         let message = `HTTP ${res.status}`;
 
-        if (expectXml && res.ok) {
+        if (xmlTag && res.ok) {
+          // GET endpoint — verify expected XML tag is present
           const text = await res.text();
-          if (text.includes('<Semilla>')) {
-            message = 'Semilla recibida — servicio activo';
+          if (text.includes(`<${xmlTag}`)) {
+            ok = true;
+            message = `Semilla recibida correctamente (<${xmlTag}>)`;
           } else {
             ok = false;
-            message = 'Respuesta inesperada (sin etiqueta Semilla)';
+            message = `Respuesta inesperada (sin etiqueta <${xmlTag}>)`;
           }
-        } else if (res.ok) {
-          message = `Servicio activo (HTTP ${res.status})`;
-        } else if (res.status === 405) {
-          // POST-only endpoint returns 405 for GET — still reachable
-          message = 'Servicio activo (endpoint POST, HTTP 405 esperado)';
-          ok = true;
         } else if (res.status === 400) {
-          message = 'Servicio activo (HTTP 400 — requiere payload)';
+          // POST endpoint without body → 400 = service is up, just needs payload
           ok = true;
-        } else if (res.status === 404) {
-          message = 'Ruta no encontrada (HTTP 404)';
+          message = 'Servicio activo (HTTP 400 — requiere cuerpo XML firmado)';
+        } else if (res.status === 401) {
+          ok = true;
+          message = 'Servicio activo (HTTP 401 — requiere autenticación)';
+        } else if (res.status < 500) {
+          ok = true;
+          message = `Servicio activo (HTTP ${res.status})`;
+        } else {
           ok = false;
+          message = `Error del servidor (HTTP ${res.status})`;
         }
 
         return { key, label, url, ok, status: res.status, message };

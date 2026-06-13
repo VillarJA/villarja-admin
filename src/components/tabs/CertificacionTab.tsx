@@ -12,7 +12,7 @@ const ECF_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
 const SERVICE_URLS = {
   autenticacion: `${ECF_BASE}/fe/autenticacion/api/semilla`,
-  token:         `${ECF_BASE}/fe/autenticacion/api/token`,
+  validacion:    `${ECF_BASE}/fe/autenticacion/api/validacioncertificado`,
   recepcion:     `${ECF_BASE}/fe/recepcion/api/ecf`,
   aprobacion:    `${ECF_BASE}/fe/aprobacioncomercial/api/ecf`,
 };
@@ -1401,7 +1401,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         const urlResultMap = Object.fromEntries(urlValidation.map((r) => [r.key, r]));
         const URL_KEYS: { key: string; label: string; url: string }[] = [
           { key: 'semilla',    label: 'Autenticación — Semilla',                    url: SERVICE_URLS.autenticacion },
-          { key: 'token',      label: 'Autenticación — Token / ValidacionCertificado', url: SERVICE_URLS.token },
+          { key: 'validacion', label: 'Autenticación — ValidacionCertificado',          url: SERVICE_URLS.validacion },
           { key: 'recepcion',  label: 'Recepción de e-CF',                          url: SERVICE_URLS.recepcion },
           { key: 'aprobacion', label: 'Aprobación Comercial',                       url: SERVICE_URLS.aprobacion },
         ];
@@ -1596,7 +1596,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
               URLs de producción a registrar
             </h4>
             <URLCard label="Autenticación — Semilla" url={SERVICE_URLS.autenticacion} />
-            <URLCard label="Autenticación — Token" url={SERVICE_URLS.token} />
+            <URLCard label="Autenticación — ValidacionCertificado" url={SERVICE_URLS.validacion} />
             <URLCard label="Recepción de e-CF" url={SERVICE_URLS.recepcion} />
             <URLCard label="Aprobación Comercial" url={SERVICE_URLS.aprobacion} />
             <InstructionList items={[
