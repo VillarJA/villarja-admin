@@ -50,10 +50,10 @@ const CERT_STEPS: StepConfig[] = [
   { paso: 5,  titulo: 'Representaciones impresas al portal DGII', descripcion: 'Descargar los PDFs de los e-CF simulados y cargarlos al portal de certificación', tipo: 'hybrid'    },
   { paso: 6,  titulo: 'Validación de representaciones por DGII', descripcion: 'Esperar aprobación o corregir y reenviar representaciones impresas rechazadas', tipo: 'hybrid'    },
   { paso: 7,  titulo: 'URL servicio de prueba',             descripcion: 'Registrar las 4 URLs de servicio del ambiente certecf en el portal DGII',      tipo: 'hybrid'    },
-  { paso: 8,  titulo: 'Inicio prueba recepción e-CF',       descripcion: 'Descargar certificado raíz DGII, validar firma si aplica e indicar que el receptor está listo', tipo: 'hybrid'    },
+  { paso: 8,  titulo: 'Inicio prueba recepción e-CF',       descripcion: 'Cargar certificado raíz DGII, validar firma del emisor e indicar que el receptor está listo', tipo: 'hybrid'    },
   { paso: 9,  titulo: 'Recepción de e-CF',                  descripcion: 'Confirmar que el receptor procesa e-CF enviados por la DGII y responde ARECF', tipo: 'hybrid'    },
   { paso: 10, titulo: 'Inicio prueba aprobaciones comerciales', descripcion: 'Indicar a la DGII que el receptor está listo para recibir ACECF de prueba', tipo: 'hybrid'    },
-  { paso: 11, titulo: 'Recepción de aprobaciones comerciales', descripcion: 'Confirmar que el endpoint procesa ACECF inbound enviados por la DGII',         tipo: 'hybrid'    },
+  { paso: 11, titulo: 'Recepción de aprobaciones comerciales', descripcion: 'Confirmar que las ACECF inbound quedan procesadas correctamente',               tipo: 'hybrid'    },
   { paso: 12, titulo: 'URLs de servicio — producción',      descripcion: 'Registrar las 4 URLs de producción en el portal DGII',                         tipo: 'hybrid'    },
   { paso: 13, titulo: 'Declaración Jurada',                 descripcion: 'Firmar y enviar la Declaración Jurada al portal DGII',                         tipo: 'manual'    },
   { paso: 14, titulo: 'Verificación Estatus',               descripcion: 'La DGII verifica estatus tributario, acceso Virtual Office y representante legal — sin acción requerida del emisor', tipo: 'manual'    },
@@ -94,6 +94,14 @@ interface UrlCheckResult {
   message: string;
 }
 
+interface DgiiRootCertificateInfo {
+  exists: boolean;
+  certificate?: {
+    fileName?: string | null;
+    uploadedAt?: string | null;
+  } | null;
+}
+
 interface Props {
   company: Company;
   onOpenTestSet: () => void;
@@ -122,6 +130,20 @@ function stepTextColor(paso: number, completed: number[], selected: number): str
   if (isBlocked(paso, completed)) return 'var(--text-muted)';
   if (paso === selected) return 'var(--brand)';
   return 'var(--text)';
+}
+
+function hasValidCompanyCertificate(company: Company): boolean {
+  return company.cert === 'Vigente' || company.cert === 'Por vencer';
+}
+
+function formatOptionalDate(raw?: string | null): string {
+  if (!raw) return '—';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return new Intl.DateTimeFormat('es-DO', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
 }
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
@@ -225,6 +247,81 @@ function AlertBox({ type, children }: { type: 'info' | 'success' | 'warning' | '
       lineHeight: 1.55,
     }}>
       {children}
+    </div>
+  );
+}
+
+function ReceptionActivityPanel({
+  title,
+  rows,
+  loading,
+  emptyInitial,
+  emptyAfterStart,
+  accent,
+  onRefresh,
+}: {
+  title: string;
+  rows: Recepcion[];
+  loading: boolean;
+  emptyInitial: string;
+  emptyAfterStart: string;
+  accent: string;
+  onRefresh: () => void;
+}) {
+  return (
+    <div style={{ marginTop: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
+          {title}
+          {rows.length > 0 && (
+            <span style={{ marginLeft: 8, background: accent, color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
+              {rows.length}
+            </span>
+          )}
+        </span>
+        <button
+          className="btn"
+          style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: 5 }}
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          <Icon name="refresh" size={13} />
+          {loading ? 'Cargando…' : 'Actualizar'}
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '1.25rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+          {loading ? 'Consultando recepciones…' : emptyInitial}
+          {!loading && (
+            <div style={{ marginTop: '0.4rem' }}>{emptyAfterStart}</div>
+          )}
+        </div>
+      ) : (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.775rem' }}>
+            <thead>
+              <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>eNCF</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>RNC Emisor</th>
+                <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 10).map((r) => (
+                <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)' }}>{r.encf}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-muted)' }}>{r.rncEmisor}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    <span style={{ color: r.procesado ? '#15803d' : 'var(--warn)', fontWeight: 600 }}>
+                      {r.procesado ? 'Procesado' : 'Pendiente'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -537,6 +634,10 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [showAprobacion, setShowAprobacion] = useState(false);
   const [testFirmaResult, setTestFirmaResult] = useState<TestFirmaResult | null>(null);
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
+  const [dgiiRootCert, setDgiiRootCert] = useState<DgiiRootCertificateInfo>({ exists: false });
+  const [dgiiRootCertLoading, setDgiiRootCertLoading] = useState(false);
+  const [dgiiRootCertUploading, setDgiiRootCertUploading] = useState(false);
+  const [dgiiRootCertError, setDgiiRootCertError] = useState('');
   const [urlValidation, setUrlValidation] = useState<UrlCheckResult[]>([]);
   const [urlValidating, setUrlValidating] = useState(false);
   const [recepcionesInline, setRecepcionesInline] = useState<Recepcion[]>([]);
@@ -562,6 +663,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [simRunning, setSimRunning] = useState(false);
   const [simError, setSimError] = useState('');
   const simCancelRef = useRef(false);
+  const dgiiRootCertInputRef = useRef<HTMLInputElement>(null);
 
   function toggleRIType(tipo: number) {
     setCheckedRITypes((prev) => {
@@ -572,6 +674,7 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   }
 
   const apiKey = company.apiKey ?? '';
+  const hasIssuerCertificate = hasValidCompanyCertificate(company);
 
   useEffect(() => {
     let cancelled = false;
@@ -684,6 +787,66 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
     }
   };
 
+  const fetchDgiiRootCertificate = useCallback(async () => {
+    if (!apiKey) return;
+    setDgiiRootCertLoading(true);
+    setDgiiRootCertError('');
+    try {
+      const url = `/api/certification/dgii-root-certificate?companyId=${encodeURIComponent(company.id)}`;
+      const res = await fetch(url, {
+        headers: { 'x-api-key': apiKey },
+        cache: 'no-store',
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDgiiRootCertError((json as { error?: string }).error ?? 'No se pudo consultar el certificado raíz DGII.');
+        return;
+      }
+      setDgiiRootCert({
+        exists: Boolean((json as { data?: { exists?: boolean } }).data?.exists ?? (json as { exists?: boolean }).exists),
+        certificate: ((json as { data?: { certificate?: DgiiRootCertificateInfo['certificate'] } }).data?.certificate
+          ?? (json as { certificate?: DgiiRootCertificateInfo['certificate'] }).certificate
+          ?? null),
+      });
+    } catch (err) {
+      setDgiiRootCertError(err instanceof Error ? err.message : 'Error al consultar el certificado raíz DGII.');
+    } finally {
+      setDgiiRootCertLoading(false);
+    }
+  }, [apiKey, company.id]);
+
+  const uploadDgiiRootCertificate = async (file: File) => {
+    setDgiiRootCertUploading(true);
+    setDgiiRootCertError('');
+    try {
+      const fd = new FormData();
+      fd.append('companyId', company.id);
+      fd.append('cert', file);
+
+      const res = await fetch('/api/certification/dgii-root-certificate', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+        body: fd,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDgiiRootCertError((json as { error?: string }).error ?? 'No se pudo subir el certificado raíz DGII.');
+        return;
+      }
+      setDgiiRootCert({
+        exists: true,
+        certificate: ((json as { data?: { certificate?: DgiiRootCertificateInfo['certificate'] } }).data?.certificate
+          ?? (json as { certificate?: DgiiRootCertificateInfo['certificate'] }).certificate
+          ?? { fileName: file.name, uploadedAt: new Date().toISOString() }),
+      });
+    } catch (err) {
+      setDgiiRootCertError(err instanceof Error ? err.message : 'Error al subir el certificado raíz DGII.');
+    } finally {
+      setDgiiRootCertUploading(false);
+      if (dgiiRootCertInputRef.current) dgiiRootCertInputRef.current.value = '';
+    }
+  };
+
   // ── Validate service URLs (Paso 7) ──
   const handleValidateUrls = async () => {
     setUrlValidating(true);
@@ -718,6 +881,14 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
       setRecepcionesInlineLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedPaso !== 8) return;
+    const timer = window.setTimeout(() => {
+      void fetchDgiiRootCertificate();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchDgiiRootCertificate, selectedPaso]);
 
   // ── Progress bar ──
   const completedCount = progress.completedSteps.length;
@@ -1485,26 +1656,83 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII habilita el inicio de las <strong>pruebas de comunicación</strong>. Aquí debes preparar la recepción del emisor: descargar el <strong>certificado raíz DGII</strong>, dejar listas las URLs del paso 7 e indicar en el portal que el receptor está listo para recibir e-CF de prueba.
+              La DGII habilita el inicio de las <strong>pruebas de comunicación</strong>. Antes de iniciar la recepción e-CF conviene dejar cargado en el API el <strong>certificado raíz DGII</strong> que entrega el portal certecf, para que la configuración del cliente no dependa de archivos hardcodeados.
             </p>
             <AlertBox type="info">
-              La validación interna de firma que ves abajo es una ayuda técnica de Villar JA. Sirve para comprobar el certificado del emisor, pero el paso oficial de DGII también incluye la preparación del receptor y el certificado raíz.
+              Este paso combina dos validaciones: el <strong>certificado raíz DGII</strong> que usa la integración del cliente y el <strong>.p12 del emisor</strong> con el que Villar JA firma respuestas como el ARECF.
             </AlertBox>
-            {!company.cert && (
+            <div style={{
+              padding: '1rem',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              background: 'var(--surface-alt, #f9f9f8)',
+              marginBottom: '1rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.25rem' }}>
+                    Certificado raíz DGII
+                  </div>
+                  <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                    Sube el archivo <code style={{ fontSize: '0.72rem' }}>.cer</code>, <code style={{ fontSize: '0.72rem' }}>.crt</code> o <code style={{ fontSize: '0.72rem' }}>.pem</code> contenido dentro del ZIP descargado desde DGII.
+                  </div>
+                </div>
+                <button
+                  className="btn"
+                  style={{ fontSize: '0.75rem' }}
+                  onClick={() => dgiiRootCertInputRef.current?.click()}
+                  disabled={dgiiRootCertUploading || blocked}
+                >
+                  <Icon name="upload" size={13} style={{ marginRight: 4 }} />
+                  {dgiiRootCertUploading ? 'Subiendo…' : dgiiRootCert.exists ? 'Reemplazar certificado' : 'Subir certificado'}
+                </button>
+              </div>
+              <input
+                ref={dgiiRootCertInputRef}
+                type="file"
+                accept=".cer,.crt,.pem"
+                style={{ display: 'none' }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadDgiiRootCertificate(file);
+                }}
+              />
+              <div style={{ marginTop: '0.85rem' }}>
+                {dgiiRootCertLoading ? (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Verificando certificado raíz cargado…</div>
+                ) : dgiiRootCert.exists ? (
+                  <AlertBox type="success">
+                    Certificado raíz listo.
+                    {dgiiRootCert.certificate?.fileName ? ` Archivo: ${dgiiRootCert.certificate.fileName}.` : ''}
+                    {' '}Subido: {formatOptionalDate(dgiiRootCert.certificate?.uploadedAt ?? null)}.
+                  </AlertBox>
+                ) : (
+                  <AlertBox type="warning">
+                    Aún no hay certificado raíz DGII cargado para este emisor. Extrae el archivo del ZIP descargado en DGII y súbelo aquí antes de iniciar la prueba.
+                  </AlertBox>
+                )}
+                {dgiiRootCertError && (
+                  <AlertBox type="error">
+                    {dgiiRootCertError}
+                  </AlertBox>
+                )}
+              </div>
+            </div>
+            {!hasIssuerCertificate && (
               <AlertBox type="error">
                 No hay certificado digital cargado para este emisor. Carga el certificado .p12 desde el botón &quot;Certificado Digital&quot; antes de continuar.
               </AlertBox>
             )}
             <InstructionList items={[
-              'Descarga el certificado raíz DGII desde el portal certecf si la prueba de comunicación lo solicita',
-              'Verifica que las URLs del Paso 7 siguen registradas correctamente',
-              'Confirma en el portal DGII que el receptor está listo para recibir e-CF de prueba',
-              'Usa la prueba de firma de abajo como validación técnica adicional antes de marcar el paso',
+              'Descarga el ZIP del certificado raíz desde el portal DGII y extrae el archivo .cer o .crt',
+              'Súbelo aquí para que el API del cliente pueda reutilizarlo sin depender de configuración fija',
+              'Verifica que las URLs del Paso 7 siguen registradas correctamente en DGII',
+              'Ejecuta la prueba de firma del emisor y luego confirma en DGII que la prueba de recepción e-CF puede iniciar',
             ]} />
             <button
               className="btn btn-primary"
               onClick={runTestFirma}
-              disabled={testFirmaLoading || !company.cert || blocked}
+              disabled={testFirmaLoading || !hasIssuerCertificate || blocked}
               style={{
                 fontSize: '0.875rem',
                 display: 'inline-flex',
@@ -1538,7 +1766,13 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
                 {testFirmaResult.message}
               </div>
             )}
-            <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
+            {dgiiRootCert.exists || isCompleted(paso, completed) ? (
+              <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
+            ) : (
+              <AlertBox type="warning">
+                Carga primero el certificado raíz DGII para dejar la integración del cliente lista antes de marcar este paso.
+              </AlertBox>
+            )}
           </>
         );
 
@@ -1547,73 +1781,27 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII envía e-CF de prueba al endpoint de recepción del emisor para verificar que el servicio funciona correctamente. Nuestro receptor valida la firma DGII, registra cada e-CF y genera un <strong>Acuse de Recibo (ARECF)</strong> automáticamente.
+              La DGII enviará e-CF de prueba al endpoint de recepción del emisor. Cuando todo está correcto, Villar JA registra el documento y responde el <strong>ARECF</strong> automáticamente.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa todos los e-CF inbound del certecf y responde con el ARECF firmado con el certificado del emisor.
+              <strong>Resultado esperado:</strong> los e-CF de prueba deben terminar en <strong>Procesado</strong>. Si quedan en <strong>Pendiente</strong>, el flujo de acuse no terminó correctamente y hay que revisar logs o configuración.
             </AlertBox>
             <URLCard label="URL Recepción activa (certecf)" url={SERVICE_URLS.recepcion} />
-
-            {/* ── Mini-panel recepciones e-CF ── */}
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
-                  e-CFs recibidos de certecf
-                  {ecfRecs.length > 0 && (
-                    <span style={{ marginLeft: 8, background: 'var(--brand)', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
-                      {ecfRecs.length}
-                    </span>
-                  )}
-                </span>
-                <button
-                  className="btn"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: 5 }}
-                  onClick={fetchRecepcionesInline}
-                  disabled={recepcionesInlineLoading}
-                >
-                  <Icon name="refresh" size={13} />
-                  {recepcionesInlineLoading ? 'Cargando…' : 'Actualizar'}
-                </button>
-              </div>
-              {ecfRecs.length === 0 ? (
-                <div style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '1.25rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {recepcionesInline.length === 0 && !recepcionesInlineLoading
-                    ? 'Pulsa "Actualizar" para verificar si la DGII ya envió e-CFs de prueba'
-                    : 'No hay e-CFs recibidos aún — la DGII los enviará después de confirmar el Paso 8'}
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.775rem' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>eNCF</th>
-                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>RNC Emisor</th>
-                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ecfRecs.slice(0, 10).map((r) => (
-                        <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)' }}>{r.encf}</td>
-                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-muted)' }}>{r.rncEmisor}</td>
-                          <td style={{ padding: '0.5rem 0.75rem' }}>
-                            <span style={{ color: r.procesado ? '#15803d' : 'var(--warn)', fontWeight: 600 }}>
-                              {r.procesado ? 'Procesado' : 'Pendiente'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <ReceptionActivityPanel
+              title="e-CFs recibidos de certecf"
+              rows={ecfRecs}
+              loading={recepcionesInlineLoading}
+              emptyInitial='Pulsa "Actualizar" para verificar si la DGII ya envió e-CFs de prueba.'
+              emptyAfterStart='Si la prueba ya fue iniciada y no aparece nada, valida en DGII que la URL del Paso 7 siga guardada correctamente.'
+              accent="var(--brand)"
+              onRefresh={fetchRecepcionesInline}
+            />
 
             <InstructionList items={[
               'Pulsa "Actualizar" para verificar si la DGII ya envió los e-CF de prueba',
-              'Confirma con la DGII que han enviado los e-CF a la URL de Recepción registrada en el Paso 7',
-              'Si no hay recepciones en 24 h, revisa que la URL del Paso 7 esté correctamente guardada en el portal DGII',
-              'Una vez que aparezcan los e-CFs como "Procesado", marca este paso como completado',
+              'Confirma con la DGII que el envío se hizo a la URL de Recepción registrada en el Paso 7',
+              'Si aparece "Pendiente", revisa el flujo automático del ARECF antes de continuar',
+              'Marca el paso cuando los e-CF de prueba ya estén en "Procesado"',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -1624,16 +1812,16 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              Una vez superado el Paso 9, debes <strong>indicar a la DGII</strong> que el receptor está listo para la prueba de <strong>Aprobaciones Comerciales (ACECF)</strong>. Desde ese momento la DGII podrá empezar a enviar ACECF de prueba al endpoint registrado.
+              Una vez validada la recepción de e-CF, debes <strong>indicar a la DGII</strong> que el receptor está listo para la prueba de <strong>Aprobaciones Comerciales (ACECF)</strong>.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> Cuando la DGII inicie esta prueba, Villar JA procesará las ACECF inbound en el receptor centralizado y podrás verificarlas luego en el Paso 11.
+              <strong>Automático:</strong> la DGII enviará ACECF de prueba al endpoint registrado y Villar JA las procesará en el receptor centralizado. El resultado se verifica en el Paso 11.
             </AlertBox>
             <InstructionList items={[
               'En el portal DGII, selecciona la opción para iniciar la prueba de aprobaciones comerciales',
-              'Confirma que las URLs del Paso 7 no hayan cambiado y que el certificado del emisor siga vigente',
-              'Coordina con la DGII el momento de envío de las ACECF de prueba',
-              'Marca este paso cuando la DGII confirme que la prueba fue iniciada',
+              'Confirma que las URLs del Paso 7 siguen iguales y que el certificado del emisor continúa vigente',
+              'Guarda el cambio en DGII y espera el envío de ACECF de prueba',
+              'Marca este paso cuando DGII confirme que la prueba ya fue iniciada',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
@@ -1644,73 +1832,27 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
-              La DGII envía <strong>Aprobaciones Comerciales (ACECF)</strong> de prueba al endpoint de aprobaciones del emisor para verificar que el servicio procesa correctamente las respuestas inbound.
+              La DGII enviará <strong>Aprobaciones Comerciales (ACECF)</strong> al endpoint del emisor para validar la comunicación inbound del paso comercial.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa las ACECF inbound en tiempo real.
+              <strong>Resultado esperado:</strong> las ACECF de prueba deben terminar en <strong>Procesado</strong>. Si quedan <strong>Pendiente</strong>, la aprobación no se respondió correctamente.
             </AlertBox>
             <URLCard label="URL Aprobación Comercial activa (certecf)" url={SERVICE_URLS.aprobacion} />
-
-            {/* ── Mini-panel recepciones ACECF ── */}
-            <div style={{ marginTop: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
-                  Aprobaciones comerciales recibidas
-                  {acecfRecs.length > 0 && (
-                    <span style={{ marginLeft: 8, background: 'var(--ok, #16a34a)', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
-                      {acecfRecs.length}
-                    </span>
-                  )}
-                </span>
-                <button
-                  className="btn"
-                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: 5 }}
-                  onClick={fetchRecepcionesInline}
-                  disabled={recepcionesInlineLoading}
-                >
-                  <Icon name="refresh" size={13} />
-                  {recepcionesInlineLoading ? 'Cargando…' : 'Actualizar'}
-                </button>
-              </div>
-              {acecfRecs.length === 0 ? (
-                <div style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '1.25rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {recepcionesInline.length === 0 && !recepcionesInlineLoading
-                    ? 'Pulsa "Actualizar" para verificar si la DGII ya envió ACECF de prueba'
-                    : 'No hay ACECF recibidas aún — la DGII las enviará después de confirmar el Paso 10'}
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.775rem' }}>
-                    <thead>
-                      <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>eNCF</th>
-                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>RNC Emisor</th>
-                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {acecfRecs.slice(0, 10).map((r) => (
-                        <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)' }}>{r.encf}</td>
-                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-muted)' }}>{r.rncEmisor}</td>
-                          <td style={{ padding: '0.5rem 0.75rem' }}>
-                            <span style={{ color: r.procesado ? '#15803d' : 'var(--warn)', fontWeight: 600 }}>
-                              {r.procesado ? 'Procesado' : 'Pendiente'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            <ReceptionActivityPanel
+              title="Aprobaciones comerciales recibidas"
+              rows={acecfRecs}
+              loading={recepcionesInlineLoading}
+              emptyInitial='Pulsa "Actualizar" para verificar si la DGII ya envió ACECF de prueba.'
+              emptyAfterStart='Si DGII ya inició la prueba y no hay filas, revisa la URL de aprobación comercial registrada en el Paso 7.'
+              accent="var(--ok, #16a34a)"
+              onRefresh={fetchRecepcionesInline}
+            />
 
             <InstructionList items={[
               'Pulsa "Actualizar" para verificar si la DGII ya envió ACECF de prueba',
-              'Confirma con la DGII que el flujo de ACECF inbound fue procesado correctamente',
-              'Si no hay ACECF en 24 h, revisa que la URL de Aprobación Comercial del Paso 7 esté correctamente registrada',
-              'Marca este paso cuando aparezcan las ACECF como "Procesado"',
+              'Confirma con la DGII que el flujo de ACECF inbound se ejecutó sobre la URL correcta',
+              'Si alguna fila queda en "Pendiente", revisa la respuesta automática antes de continuar',
+              'Marca este paso cuando las ACECF ya estén en "Procesado"',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
