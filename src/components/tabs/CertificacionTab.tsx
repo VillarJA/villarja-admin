@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Icon } from '@/components/Icons';
-import { getFacturasForCliente } from '@/lib/data-layer';
-import type { Company, Factura } from '@/types';
+import { getFacturasForCliente, getRecepcionesForCliente } from '@/lib/data-layer';
+import type { Company, Factura, Recepcion } from '@/types';
 import { AprobacionModal } from '@/components/modals/AprobacionModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -539,6 +539,8 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
   const [testFirmaLoading, setTestFirmaLoading] = useState(false);
   const [urlValidation, setUrlValidation] = useState<UrlCheckResult[]>([]);
   const [urlValidating, setUrlValidating] = useState(false);
+  const [recepcionesInline, setRecepcionesInline] = useState<Recepcion[]>([]);
+  const [recepcionesInlineLoading, setRecepcionesInlineLoading] = useState(false);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [facturasLoading, setFacturasLoading] = useState(true);
   const [checkedRITypes, setCheckedRITypes] = useState<Set<number>>(() => {
@@ -701,6 +703,19 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
       }]);
     } finally {
       setUrlValidating(false);
+    }
+  };
+
+  // ── Inline recepciones (Pasos 9 y 11) ──
+  const fetchRecepcionesInline = async () => {
+    setRecepcionesInlineLoading(true);
+    try {
+      const data = await getRecepcionesForCliente(company.id);
+      setRecepcionesInline(data);
+    } catch {
+      // non-critical
+    } finally {
+      setRecepcionesInlineLoading(false);
     }
   };
 
@@ -1527,7 +1542,8 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
           </>
         );
 
-      case 9:
+      case 9: {
+        const ecfRecs = recepcionesInline.filter((r) => r.tipo === 'ecf');
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
@@ -1537,15 +1553,72 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
               <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa todos los e-CF inbound del certecf y responde con el ARECF firmado con el certificado del emisor.
             </AlertBox>
             <URLCard label="URL Recepción activa (certecf)" url={SERVICE_URLS.recepcion} />
+
+            {/* ── Mini-panel recepciones e-CF ── */}
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
+                  e-CFs recibidos de certecf
+                  {ecfRecs.length > 0 && (
+                    <span style={{ marginLeft: 8, background: 'var(--brand)', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
+                      {ecfRecs.length}
+                    </span>
+                  )}
+                </span>
+                <button
+                  className="btn"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: 5 }}
+                  onClick={fetchRecepcionesInline}
+                  disabled={recepcionesInlineLoading}
+                >
+                  <Icon name="refresh" size={13} />
+                  {recepcionesInlineLoading ? 'Cargando…' : 'Actualizar'}
+                </button>
+              </div>
+              {ecfRecs.length === 0 ? (
+                <div style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '1.25rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {recepcionesInline.length === 0 && !recepcionesInlineLoading
+                    ? 'Pulsa "Actualizar" para verificar si la DGII ya envió e-CFs de prueba'
+                    : 'No hay e-CFs recibidos aún — la DGII los enviará después de confirmar el Paso 8'}
+                </div>
+              ) : (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.775rem' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>eNCF</th>
+                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>RNC Emisor</th>
+                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ecfRecs.slice(0, 10).map((r) => (
+                        <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)' }}>{r.encf}</td>
+                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-muted)' }}>{r.rncEmisor}</td>
+                          <td style={{ padding: '0.5rem 0.75rem' }}>
+                            <span style={{ color: r.procesado ? '#15803d' : 'var(--warn)', fontWeight: 600 }}>
+                              {r.procesado ? 'Procesado' : 'Pendiente'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <InstructionList items={[
-              'Confirma con la DGII que han enviado los e-CF de prueba a la URL de Recepción registrada en el Paso 7',
-              'Ve a la pestaña "Recepciones" del emisor y verifica que aparecen los comprobantes inbound del certecf',
+              'Pulsa "Actualizar" para verificar si la DGII ya envió los e-CF de prueba',
+              'Confirma con la DGII que han enviado los e-CF a la URL de Recepción registrada en el Paso 7',
               'Si no hay recepciones en 24 h, revisa que la URL del Paso 7 esté correctamente guardada en el portal DGII',
-              'Una vez confirmado que la DGII envió y el sistema recibió, marca este paso como completado',
+              'Una vez que aparezcan los e-CFs como "Procesado", marca este paso como completado',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
+      }
 
       case 10:
         return (
@@ -1566,25 +1639,83 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
           </>
         );
 
-      case 11:
+      case 11: {
+        const acecfRecs = recepcionesInline.filter((r) => r.tipo === 'aprobacion');
         return (
           <>
             <p style={{ fontSize: '0.8375rem', color: 'var(--text)', lineHeight: 1.65, marginTop: 0 }}>
               La DGII envía <strong>Aprobaciones Comerciales (ACECF)</strong> de prueba al endpoint de aprobaciones del emisor para verificar que el servicio procesa correctamente las respuestas inbound.
             </p>
             <AlertBox type="success">
-              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa las ACECF inbound en tiempo real. Las entradas de tipo &quot;aprobación&quot; aparecen en la pestaña Recepciones.
+              <strong>Automático:</strong> El receptor en <code style={{ fontSize: '0.75rem' }}>ecf.villarja.com</code> procesa las ACECF inbound en tiempo real.
             </AlertBox>
             <URLCard label="URL Aprobación Comercial activa (certecf)" url={SERVICE_URLS.aprobacion} />
+
+            {/* ── Mini-panel recepciones ACECF ── */}
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text)' }}>
+                  Aprobaciones comerciales recibidas
+                  {acecfRecs.length > 0 && (
+                    <span style={{ marginLeft: 8, background: 'var(--ok, #16a34a)', color: '#fff', borderRadius: 10, padding: '1px 8px', fontSize: '0.7rem', fontWeight: 700 }}>
+                      {acecfRecs.length}
+                    </span>
+                  )}
+                </span>
+                <button
+                  className="btn"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: 5 }}
+                  onClick={fetchRecepcionesInline}
+                  disabled={recepcionesInlineLoading}
+                >
+                  <Icon name="refresh" size={13} />
+                  {recepcionesInlineLoading ? 'Cargando…' : 'Actualizar'}
+                </button>
+              </div>
+              {acecfRecs.length === 0 ? (
+                <div style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '1.25rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {recepcionesInline.length === 0 && !recepcionesInlineLoading
+                    ? 'Pulsa "Actualizar" para verificar si la DGII ya envió ACECF de prueba'
+                    : 'No hay ACECF recibidas aún — la DGII las enviará después de confirmar el Paso 10'}
+                </div>
+              ) : (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.775rem' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--surface-alt)', borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>eNCF</th>
+                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>RNC Emisor</th>
+                        <th style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-muted)' }}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {acecfRecs.slice(0, 10).map((r) => (
+                        <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text)' }}>{r.encf}</td>
+                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-muted)' }}>{r.rncEmisor}</td>
+                          <td style={{ padding: '0.5rem 0.75rem' }}>
+                            <span style={{ color: r.procesado ? '#15803d' : 'var(--warn)', fontWeight: 600 }}>
+                              {r.procesado ? 'Procesado' : 'Pendiente'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <InstructionList items={[
-              'Ve a la pestaña "Recepciones" del emisor y verifica que hay entradas de tipo "aprobación" del certecf',
+              'Pulsa "Actualizar" para verificar si la DGII ya envió ACECF de prueba',
               'Confirma con la DGII que el flujo de ACECF inbound fue procesado correctamente',
-              'Si no hay recepciones ACECF, revisa que la URL de Aprobación Comercial del Paso 7 esté correctamente registrada',
-              'Marca este paso cuando la DGII confirme el flujo de aprobaciones comerciales inbound',
+              'Si no hay ACECF en 24 h, revisa que la URL de Aprobación Comercial del Paso 7 esté correctamente registrada',
+              'Marca este paso cuando aparezcan las ACECF como "Procesado"',
             ]} />
             <ConfirmButton paso={paso} completed={completed} onMark={markStep} loading={marking} />
           </>
         );
+      }
 
       case 12:
         return (
