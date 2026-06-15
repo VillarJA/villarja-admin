@@ -105,6 +105,7 @@ interface DgiiRootCertificateInfo {
 interface Props {
   company: Company;
   onOpenTestSet: () => void;
+  onCertStatusChange?: (newStatus: 'en_proceso' | 'certificada') => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -621,7 +622,7 @@ function SimCaseRow({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function CertificacionTab({ company, onOpenTestSet }: Props) {
+export function CertificacionTab({ company, onOpenTestSet, onCertStatusChange }: Props) {
   const [selectedPaso, setSelectedPaso] = useState(1);
   const [progress, setProgress] = useState<ProgressData>({
     status: 'no_iniciada',
@@ -741,11 +742,15 @@ export function CertificacionTab({ company, onOpenTestSet }: Props) {
       const json = await res.json().catch(() => ({}));
       if (res.ok) {
         const data = (json as { data?: { status: string; completedSteps: number[] } }).data ?? json;
+        const newStatus = (data as { status: ProgressData['status'] }).status;
         setProgress((prev) => ({
           ...prev,
-          status: (data as { status: ProgressData['status'] }).status,
+          status: newStatus,
           completedSteps: (data as { completedSteps: number[] }).completedSteps,
         }));
+        if (newStatus === 'en_proceso' || newStatus === 'certificada') {
+          onCertStatusChange?.(newStatus);
+        }
       } else {
         setMarkError((json as { error?: string }).error ?? `Error ${res.status} al guardar el progreso`);
       }

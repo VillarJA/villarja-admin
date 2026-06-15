@@ -129,7 +129,7 @@ function mapFactura(row: Record<string, unknown>): Factura {
     monto,
     itbis,
     total: Number(row.monto_total ?? row.total ?? monto + itbis),
-    estado: String(row.estado || 'pending') as Factura['estado'],
+    estado: String(row.estado || 'pending').toLowerCase() as Factura['estado'],
     fecha: new Date(String(row.created_at || row.fecha || new Date().toISOString())),
   };
 }
@@ -366,10 +366,10 @@ export async function getContingenciaQueue(): Promise<ContingenciaItem[]> {
       select: '*, companies(razon_social)',
       order: { column: 'created_at', ascending: true },
     });
-    if (!data.length) return CONTINGENCIA_QUEUE;
+    if (!data.length) return [];
     return data.map((row) => mapContingencia(row));
   } catch {
-    return CONTINGENCIA_QUEUE;
+    return [];
   }
 }
 
@@ -380,7 +380,7 @@ export async function getContingenciaHist(): Promise<ContingenciaHist[]> {
       order: { column: 'created_at', ascending: false },
       limit: 20,
     });
-    if (!data.length) return CONTINGENCIA_HIST;
+    if (!data.length) return [];
     return data.map((r) => {
       const d = new Date(String(r.created_at));
       const ts = new Intl.DateTimeFormat('es-DO', {
@@ -394,7 +394,7 @@ export async function getContingenciaHist(): Promise<ContingenciaHist[]> {
       };
     });
   } catch {
-    return CONTINGENCIA_HIST;
+    return [];
   }
 }
 

@@ -579,6 +579,9 @@ export default function ClienteDetallePage({ params }: { params: Promise<{ id: s
             <CertificacionTab
               company={company}
               onOpenTestSet={() => setShowCertificacion(true)}
+              onCertStatusChange={(newStatus) =>
+                setCompany((c) => c ? { ...c, certStatus: newStatus } : c)
+              }
             />
           </div>
         )}

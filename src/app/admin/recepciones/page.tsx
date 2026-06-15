@@ -83,7 +83,8 @@ export default function RecepcionesPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const xml = await res.text();
       const w = window.open('', '_blank');
-      if (w) { w.document.write('<pre>' + xml.replace(/</g, '&lt;') + '</pre>'); }
+      if (!w) { toast('El navegador bloqueó la ventana. Permita pop-ups para ver el XML.'); return; }
+      w.document.write('<pre>' + xml.replace(/</g, '&lt;') + '</pre>');
     } catch {
       toast('XML no disponible en este momento');
     }

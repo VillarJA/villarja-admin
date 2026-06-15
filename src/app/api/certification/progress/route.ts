@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServiceClient } from '@/lib/supabase-server';
 
 const ECF_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
@@ -36,6 +37,31 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
     const responseBody = await upstream.json().catch(() => ({}));
+
+    // When certification completes, persist status to the companies table so the
+    // badge is correct on next page load (not just in the current session).
+    if (upstream.ok) {
+      const data = (responseBody as { data?: { status?: string } }).data ?? responseBody;
+      const newStatus = (data as { status?: string }).status;
+      if (newStatus === 'certificada' || newStatus === 'en_proceso') {
+        const supabase = createServiceClient();
+        if (supabase) {
+          // Look up company by API key, then update certification_status
+          const { data: rows } = await supabase
+            .from('companies')
+            .select('id')
+            .eq('api_key', key)
+            .limit(1);
+          if (rows?.[0]?.id) {
+            await supabase
+              .from('companies')
+              .update({ certification_status: newStatus })
+              .eq('id', rows[0].id);
+          }
+        }
+      }
+    }
+
     return NextResponse.json(responseBody, { status: upstream.status });
   } catch (err) {
     return NextResponse.json(

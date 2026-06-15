@@ -76,10 +76,9 @@ export default function FacturasPage() {
   };
 
   const handleVerEstadoDgii = async (f: Factura) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
     const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
     try {
-      const res = await fetch(`${API_BASE}/admin/ecf/${f.id}/estado-dgii`, {
+      const res = await fetch(`/api/admin/ecf/${f.id}/estado-dgii`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -91,16 +90,16 @@ export default function FacturasPage() {
   };
 
   const handleVerXml = async (f: Factura) => {
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
     const token = typeof window !== 'undefined' ? localStorage.getItem('vja_admin_token') : null;
     try {
-      const res = await fetch(`${API_BASE}/admin/ecf/${f.id}/xml`, {
+      const res = await fetch(`/api/admin/ecf/${f.id}/xml`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const xml = await res.text();
       const w = window.open('', '_blank');
-      if (w) { w.document.write('<pre>' + xml.replace(/</g, '&lt;') + '</pre>'); }
+      if (!w) { toast('El navegador bloqueó la ventana. Permita pop-ups para ver el XML.'); return; }
+      w.document.write('<pre>' + xml.replace(/</g, '&lt;') + '</pre>');
     } catch {
       toast('API no disponible — XML no accesible en este momento');
     }
