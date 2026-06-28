@@ -662,16 +662,15 @@ function ambToPrefix(amb: string): 'vja_live' | 'vja_cert' | 'vja_test' {
   return 'vja_test';
 }
 
-export async function regenerateApiKey(id: string, razon: string, amb: string): Promise<string> {
-  const newKey = generateApiKey(ambToPrefix(amb));
-  if (!supabase) return newKey;
-  const { error } = await supabase
-    .from('companies')
-    .update({ api_key: newKey })
-    .eq('id', id);
-  if (error) throw new Error(error.message);
+export async function regenerateApiKey(id: string, razon: string, _amb: string): Promise<string> {
+  const res = await fetch(`/api/admin/companies/${id}/regenerate-key`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} al regenerar API Key`);
+  }
+  const data = await res.json() as { api_key: string };
   await insertAuditLog('Regeneró API Key', razon);
-  return newKey;
+  return data.api_key;
 }
 
 export async function updateCompanyAmbiente(
@@ -679,13 +678,17 @@ export async function updateCompanyAmbiente(
   newAmbiente: string,
   razon: string,
 ): Promise<string> {
-  const newKey = generateApiKey(ambToPrefix(newAmbiente));
-  if (!supabase) return newKey;
-  const { error } = await supabase
-    .from('companies')
-    .update({ ambiente: newAmbiente, api_key: newKey })
-    .eq('id', id);
-  if (error) throw new Error(error.message);
+  const res = await fetch(`/api/admin/companies/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ambiente: newAmbiente }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} al cambiar ambiente`);
+  }
+  const data = await res.json() as Record<string, unknown>;
+  const newKey = String(data.api_key ?? '');
   await insertAuditLog(`Cambió ambiente a ${newAmbiente} — API Key regenerada`, razon);
   return newKey;
 }
