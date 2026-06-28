@@ -624,7 +624,7 @@ export async function updateCompanyEstado(
   if (!supabase) return;
   let result = await supabase
     .from('companies')
-    .update({ estado })
+    .update({ estado, activa: estado === 'Activo' })
     .eq('id', id);
 
   if (isLegacySchemaMismatch(result.error)) {
