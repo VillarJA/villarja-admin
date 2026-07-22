@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase-server';
+import { requireSupabaseAdmin } from '@/lib/admin-session';
+import { recordAdminAudit } from '@/lib/admin-audit';
 
 function generateApiKey(prefix: 'vja_live' | 'vja_cert' | 'vja_test' = 'vja_live'): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -20,6 +22,9 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireSupabaseAdmin(_req);
+  if (auth.response) return auth.response;
+
   const { id } = await params;
   const supabase = createServiceClient();
   if (!supabase) {
@@ -40,6 +45,11 @@ export async function POST(
   }
 
   const newKey = generateApiKey(ambienteToPrefix(String(company.ambiente ?? 'testeCF')));
+  try {
+    await recordAdminAudit(_req, auth.user, 'Regeneró API Key', id);
+  } catch (auditError) {
+    return NextResponse.json({ error: auditError instanceof Error ? auditError.message : 'No se pudo registrar auditoría' }, { status: 500 });
+  }
 
   const { error } = await supabase
     .from('companies')

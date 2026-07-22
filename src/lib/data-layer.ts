@@ -1,14 +1,6 @@
-import { supabase } from './supabase';
 import type { Company, Factura, Recepcion, Secuencia, ContingenciaItem, ContingenciaHist, DgiiService, AuditLog, DonutItem } from '@/types';
+import { AUDIT_LOG, DGII_SERVICES, COMARK, ECF_TYPES, PLAN_LIMITS } from './data';
 import {
-  CONTINGENCIA_QUEUE, CONTINGENCIA_HIST,
-  AUDIT_LOG, DGII_SERVICES, COMARK, PLAN_LIMITS, ECF_TYPES,
-} from './data';
-import {
-  buildLegacyCompanyInsertPayload,
-  buildLegacyEstadoUpdate,
-  buildModernCompanyInsertPayload,
-  isLegacySchemaMismatch,
   normalizeCompanyAmbiente,
   normalizeCompanyEstado,
 } from './company-schema';
@@ -36,31 +28,6 @@ async function adminQuery<T = Record<string, unknown>>(params: {
     throw new Error(String(body.error ?? `Error ${res.status} leyendo ${params.table}`));
   }
   return res.json() as Promise<T[]>;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateApiKey(prefix: 'vja_live' | 'vja_cert' | 'vja_test' = 'vja_live'): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const arr = new Uint8Array(24);
-  crypto.getRandomValues(arr);
-  const random = Array.from(arr, (b) => chars[b % chars.length]).join('');
-  return `${prefix}_${random}`;
-}
-
-async function insertAuditLog(accion: string, obj: string): Promise<void> {
-  if (!supabase) return;
-  const actor = typeof window !== 'undefined'
-    ? (localStorage.getItem('vja_admin_email') ?? 'admin')
-    : 'admin';
-  try {
-    await supabase.from('audit_log').insert({
-      actor,
-      accion,
-      objeto: obj,
-      ip: '—',
-    });
-  } catch { /* non-critical */ }
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -498,9 +465,10 @@ export async function getPortalConfig(): Promise<PortalConfig> {
 }
 
 export async function upsertPortalConfig(cfg: PortalConfig): Promise<void> {
-  if (!supabase) throw new Error('Supabase no configurado');
-  const { error } = await supabase.from('portal_config').upsert({
-    id: true,
+  const res = await fetch('/api/admin/portal-config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
     admin_name: cfg.adminName,
     admin_email: cfg.adminEmail,
     razon_social: cfg.razonSocial,
@@ -515,9 +483,12 @@ export async function upsertPortalConfig(cfg: PortalConfig): Promise<void> {
     rate_limiting: cfg.rateLimiting,
     tfa_admin: cfg.tfaAdmin,
     rotacion_llaves: cfg.rotacionLlaves,
-    updated_at: new Date().toISOString(),
+    }),
   });
-  if (error) throw new Error(error.message);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} guardando configuración`);
+  }
 }
 
 // ─── READ: Planes ─────────────────────────────────────────────────────────────
@@ -583,28 +554,17 @@ export interface CreateCompanyInput {
 }
 
 export async function createCompany(input: CreateCompanyInput): Promise<Company> {
-  const apiKey = generateApiKey(ambToPrefix(input.ambiente));
-  const planLimit = PLAN_LIMITS[input.plan]?.facturas ?? 500;
-
-  if (!supabase) throw new Error('Supabase no configurado');
-
-  let result = await supabase
-    .from('companies')
-    .insert(buildModernCompanyInsertPayload(input, apiKey))
-    .select()
-    .single();
-
-  if (isLegacySchemaMismatch(result.error)) {
-    result = await supabase
-      .from('companies')
-      .insert(buildLegacyCompanyInsertPayload(input, apiKey, planLimit))
-      .select()
-      .single();
+  const res = await fetch('/api/admin/companies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} creando cliente`);
   }
-
-  if (result.error) throw new Error(result.error.message);
-  await insertAuditLog('Nuevo cliente registrado', input.razonSocial);
-  const company = mapCompany(result.data as Record<string, unknown>, 0);
+  const row = await res.json() as Record<string, unknown>;
+  const company = mapCompany(row, 0);
 
   // Auto-create test sequences for certeCF / testeCF (non-critical)
   if (input.ambiente.toLowerCase() !== 'ecf') {
@@ -621,24 +581,16 @@ export async function updateCompanyEstado(
   estado: Company['estado'],
   razon: string,
 ): Promise<void> {
-  if (!supabase) return;
-  let result = await supabase
-    .from('companies')
-    .update({ estado, activa: estado === 'Activo' })
-    .eq('id', id);
-
-  if (isLegacySchemaMismatch(result.error)) {
-    result = await supabase
-      .from('companies')
-      .update(buildLegacyEstadoUpdate(estado))
-      .eq('id', id);
+  void razon;
+  const res = await fetch(`/api/admin/companies/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ estado }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} actualizando estado`);
   }
-
-  if (result.error) throw new Error(result.error.message);
-  await insertAuditLog(
-    estado === 'Suspendido' ? 'Suspendió cliente' : 'Activó cliente',
-    razon,
-  );
 }
 
 export async function updateCompanyPlan(
@@ -646,30 +598,27 @@ export async function updateCompanyPlan(
   plan: Company['plan'],
   razon: string,
 ): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase
-    .from('companies')
-    .update({ plan })
-    .eq('id', id);
-  if (error) throw new Error(error.message);
-  await insertAuditLog(`Cambió plan a ${plan}`, razon);
-}
-
-function ambToPrefix(amb: string): 'vja_live' | 'vja_cert' | 'vja_test' {
-  const n = amb.toLowerCase();
-  if (n === 'ecf') return 'vja_live';
-  if (n === 'certecf') return 'vja_cert';
-  return 'vja_test';
+  void razon;
+  const res = await fetch(`/api/admin/companies/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} actualizando plan`);
+  }
 }
 
 export async function regenerateApiKey(id: string, razon: string, _amb: string): Promise<string> {
+  void razon;
+  void _amb;
   const res = await fetch(`/api/admin/companies/${id}/regenerate-key`, { method: 'POST' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? `Error ${res.status} al regenerar API Key`);
   }
   const data = await res.json() as { api_key: string };
-  await insertAuditLog('Regeneró API Key', razon);
   return data.api_key;
 }
 
@@ -678,6 +627,7 @@ export async function updateCompanyAmbiente(
   newAmbiente: string,
   razon: string,
 ): Promise<string> {
+  void razon;
   const res = await fetch(`/api/admin/companies/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -689,7 +639,6 @@ export async function updateCompanyAmbiente(
   }
   const data = await res.json() as Record<string, unknown>;
   const newKey = String(data.api_key ?? '');
-  await insertAuditLog(`Cambió ambiente a ${newAmbiente} — API Key regenerada`, razon);
   return newKey;
 }
 
@@ -704,22 +653,16 @@ export interface CreateSecuenciaInput {
 }
 
 export async function createSecuencia(input: CreateSecuenciaInput): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from('sequences').insert({
-    company_id: input.companyId,
-    tipo_ecf: input.tipoEcf,
-    descripcion: ECF_TYPES[input.tipoEcf] ?? '',
-    secuencia_desde: input.desde,
-    secuencia_hasta: input.hasta,
-    usadas: 0,
-    fecha_vencimiento: input.fechaVencimiento,
-    ambiente: input.ambiente.toLowerCase(),
+  void input.razonCliente;
+  const res = await fetch(`/api/admin/companies/${input.companyId}/sequences`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
   });
-  if (error) throw new Error(error.message);
-  await insertAuditLog(
-    `Creó secuencia e-NCF tipo ${input.tipoEcf} (${input.ambiente})`,
-    input.razonCliente,
-  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} creando secuencia`);
+  }
 }
 
 // ─── DEFAULT SEQUENCES ────────────────────────────────────────────────────────
@@ -731,7 +674,6 @@ export async function createDefaultSequencias(
   ambiente: string,
   razonCliente: string,
 ): Promise<void> {
-  if (!supabase) return;
   const norm = ambiente.toLowerCase();
   if (norm === 'ecf') return; // Production sequences come from DGII; admin enters them manually
 
@@ -743,20 +685,15 @@ export async function createDefaultSequencias(
   const yr = new Date().getFullYear();
   const vence = norm === 'testecf' ? `${yr}-12-31` : `${yr + 1}-12-31`;
 
-  const inserts = DEFAULT_SEQUENCE_TYPES.map((tipo) => ({
-    company_id: companyId,
-    tipo_ecf: tipo,
-    descripcion: ECF_TYPES[tipo] ?? '',
-    secuencia_desde: 1,
-    secuencia_hasta: hasta,
-    usadas: 0,
-    fecha_vencimiento: vence,
+  await Promise.all(DEFAULT_SEQUENCE_TYPES.map((tipo) => createSecuencia({
+    companyId,
+    tipoEcf: tipo,
+    desde: 1,
+    hasta,
+    fechaVencimiento: vence,
+    razonCliente,
     ambiente: norm,
-  }));
-
-  const { error } = await supabase.from('sequences').insert(inserts);
-  if (error) throw new Error(error.message);
-  await insertAuditLog(`Creó ${inserts.length} secuencias automáticas (${norm})`, razonCliente);
+  })));
 }
 
 // ─── SYNC SEQUENCES ───────────────────────────────────────────────────────────
@@ -764,38 +701,12 @@ export async function createDefaultSequencias(
 // Counts transmitted documents (non-draft) per tipo_ecf and persists to sequences.
 // Draft invoices are excluded: they haven't been sent to DGII yet.
 async function computeAndPersistSecuenciasCounts(companyId: string): Promise<void> {
-  if (!supabase) throw new Error('Supabase no configurado');
-
-  const docs = await adminQuery({
-    table: 'ecf_documents',
-    select: 'tipo_ecf',
-    eq: { company_id: companyId },
-    neq: { estado: 'draft' },
+  const res = await fetch(`/api/admin/companies/${companyId}/sequences/sync`, {
+    method: 'POST',
   });
-
-  const counts: Record<number, number> = {};
-  for (const doc of docs) {
-    const tipo = Number(doc.tipo_ecf ?? 31);
-    counts[tipo] = (counts[tipo] || 0) + 1;
-  }
-
-  const seqs = await adminQuery({
-    table: 'sequences',
-    select: 'tipo_ecf, ambiente',
-    eq: { company_id: companyId },
-  });
-
-  for (const s of seqs) {
-    const tipo = Number(s.tipo_ecf);
-    const amb = String(s.ambiente ?? '');
-    const usadas = counts[tipo] ?? 0;
-    const { error: updErr } = await supabase
-      .from('sequences')
-      .update({ usadas })
-      .eq('company_id', companyId)
-      .eq('tipo_ecf', tipo)
-      .eq('ambiente', amb);
-    if (updErr) throw new Error(`[tipo ${tipo} / ${amb}] ${updErr.message}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} sincronizando secuencias`);
   }
 }
 
@@ -812,8 +723,8 @@ export async function syncSecuenciasUsadas(
   companyId: string,
   razon: string,
 ): Promise<Secuencia[]> {
+  void razon;
   await computeAndPersistSecuenciasCounts(companyId);
-  await insertAuditLog('Sincronizó contadores de secuencias e-NCF desde ecf_documents', razon);
   return getSecuencias(companyId);
 }
 
@@ -834,36 +745,17 @@ export async function uploadCertificate(
   razon: string,
   certMeta?: { subject: string; vence: string },
 ): Promise<void> {
-  if (!supabase) throw new Error('Supabase no configurado');
+  void razon;
   const base64 = await fileToBase64(file);
-  const update: Record<string, unknown> = {
-    certificado_data: base64,
-    certificado_estado: 'Vigente',
-  };
-  if (certMeta?.subject) update.certificado_subject = certMeta.subject;
-  if (certMeta?.vence) update.certificado_vence = certMeta.vence;
-
-  let { error } = await supabase
-    .from('companies')
-    .update(update)
-    .eq('id', companyId);
-  if (error && isLegacySchemaMismatch(error)) {
-    // Legacy schema: certificado_estado column absent — update only safe columns
-    const legacyUpdate: Record<string, unknown> = { certificado_data: base64 };
-    if (certMeta?.subject) legacyUpdate.certificado_subject = certMeta.subject;
-    if (certMeta?.vence) legacyUpdate.certificado_vence = certMeta.vence;
-    ({ error } = await supabase
-      .from('companies')
-      .update(legacyUpdate)
-      .eq('id', companyId));
+  const res = await fetch(`/api/admin/companies/${companyId}/certificate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ certificateBase64: base64, subject: certMeta?.subject, vence: certMeta?.vence }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status} subiendo certificado`);
   }
-  if (error) {
-    if (error.code === 'PGRST204' || error.code === '42703') {
-      throw new Error(`Schema cache desactualizado (${error.code}): recarga el schema cache en Supabase Dashboard → Settings → API. Detalle: ${error.message}`);
-    }
-    throw new Error(`[${error.code}] ${error.message}`);
-  }
-  await insertAuditLog('Subió certificado .p12', razon);
 }
 
 export async function updateCertPassword(
@@ -871,6 +763,7 @@ export async function updateCertPassword(
   password: string,
   razon: string,
 ): Promise<void> {
+  void razon;
   // Encrypt server-side via /api/cert-password to avoid storing plain text in DB.
   const res = await fetch('/api/cert-password', {
     method: 'POST',
@@ -881,7 +774,6 @@ export async function updateCertPassword(
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Error al guardar contraseña (${res.status})`);
   }
-  await insertAuditLog('Actualizó contraseña de certificado', razon);
 }
 
 // ─── EXPORT CSV ───────────────────────────────────────────────────────────────

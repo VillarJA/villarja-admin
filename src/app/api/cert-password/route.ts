@@ -1,10 +1,11 @@
 import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSupabaseAdmin } from '@/lib/admin-session';
+import { createServiceClient } from '@/lib/supabase-server';
+import { recordAdminAudit } from '@/lib/admin-audit';
 
 const ALGORITHM = 'aes-256-gcm' as const;
 const IV_BYTES = 16;
-const TAG_BYTES = 16;
 
 function getEncryptionKey(): Buffer {
   const raw = process.env.CERT_ENCRYPTION_KEY;
@@ -23,6 +24,9 @@ function encryptPassword(password: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSupabaseAdmin(req);
+  if (auth.response) return auth.response;
+
   let companyId: string;
   let password: string;
 
@@ -46,10 +50,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  const supabase = createServiceClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Servicio de datos no configurado' }, { status: 503 });
+  }
+  try {
+    await recordAdminAudit(req, auth.user, 'Actualizó contraseña de certificado', companyId);
+  } catch (auditError) {
+    return NextResponse.json({ error: auditError instanceof Error ? auditError.message : 'No se pudo registrar auditoría' }, { status: 500 });
+  }
 
   const { error } = await supabase
     .from('companies')

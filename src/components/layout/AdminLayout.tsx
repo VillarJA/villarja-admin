@@ -7,6 +7,7 @@ import { Topbar } from './Topbar';
 import { useToast } from '@/components/ui/Toast';
 import { removeToken } from '@/lib/auth';
 import { getContingenciaQueue, getDGIIServices } from '@/lib/data-layer';
+import { supabase } from '@/lib/supabase';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -59,7 +60,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     router.push(`/admin/${route}`);
   }, [router]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    await supabase?.auth.signOut();
     removeToken();
     document.cookie = 'vja_admin_token=; path=/; max-age=0';
     router.push('/login');

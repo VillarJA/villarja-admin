@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { demoLogin } from './helpers';
+import { hasE2EAdminCredentials, loginAsAdmin } from './helpers';
 
 test.describe('Sidebar and Topbar', () => {
+  test.skip(!hasE2EAdminCredentials, 'Se requieren credenciales Supabase de E2E');
+
   test.beforeEach(async ({ page }) => {
-    await demoLogin(page);
+    await loginAsAdmin(page);
   });
 
   test('sidebar shows Admin Portal subtitle (not Facturación e-CF)', async ({ page }) => {
@@ -16,12 +18,11 @@ test.describe('Sidebar and Topbar', () => {
   });
 
   test('topbar does not show hardcoded admin@villarja.com', async ({ page }) => {
-    // In demo mode the user is set to demo@villarja.com, not admin@villarja.com
     await expect(page.locator('.av-meta span')).not.toHaveText('admin@villarja.com');
   });
 
-  test('topbar shows demo user email after demo login', async ({ page }) => {
-    await expect(page.locator('.av-meta span')).toContainText('demo@villarja.com');
+  test('topbar shows the authenticated user email', async ({ page }) => {
+    await expect(page.locator('.av-meta span')).toContainText(process.env.E2E_SUPABASE_EMAIL ?? '');
   });
 
   test('sidebar toggle collapses sidebar', async ({ page }) => {

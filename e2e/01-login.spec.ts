@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { demoLogin, clearAuth } from './helpers';
+import { clearAuth, hasE2EAdminCredentials, loginAsAdmin } from './helpers';
 
 test.describe('Login page', () => {
   test.beforeEach(async ({ page }) => {
@@ -28,8 +28,9 @@ test.describe('Login page', () => {
     await expect(page.locator('.la-mid h2')).toHaveText('Portal de Administración');
   });
 
-  test('demo login bypasses credentials and reaches dashboard', async ({ page }) => {
-    await demoLogin(page);
+  test('valid Supabase credentials reach dashboard', async ({ page }) => {
+    test.skip(!hasE2EAdminCredentials, 'Se requieren credenciales Supabase de E2E');
+    await loginAsAdmin(page);
     await expect(page).toHaveURL('/admin/dashboard');
     await expect(page.locator('h1')).toHaveText('Dashboard');
   });
@@ -43,7 +44,8 @@ test.describe('Login page', () => {
   });
 
   test('authenticated user is redirected away from /login', async ({ page }) => {
-    await demoLogin(page);
+    test.skip(!hasE2EAdminCredentials, 'Se requieren credenciales Supabase de E2E');
+    await loginAsAdmin(page);
     await page.goto('/login');
     await expect(page).toHaveURL('/admin/dashboard');
   });

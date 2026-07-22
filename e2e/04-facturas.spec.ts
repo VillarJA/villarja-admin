@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { demoLogin } from './helpers';
+import { hasE2EAdminCredentials, loginAsAdmin } from './helpers';
 
 test.describe('Facturas page', () => {
+  test.skip(!hasE2EAdminCredentials, 'Se requieren credenciales Supabase de E2E');
+
   test.beforeEach(async ({ page }) => {
-    await demoLogin(page);
+    await loginAsAdmin(page);
     await page.goto('/admin/facturas');
     await page.waitForSelector('h1');
   });

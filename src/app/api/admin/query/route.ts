@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase-server';
+import { requireSupabaseAdmin } from '@/lib/admin-session';
+import { removePrivateCompanyFields } from '@/lib/admin-response';
 
 // Whitelist of tables the admin portal is allowed to read via service role
 const ALLOWED_TABLES = new Set([
@@ -15,6 +17,7 @@ const ALLOWED_TABLES = new Set([
   'certification_cases',
   'certification_progress',
 ]);
+const PRIVATE_COMPANY_COLUMNS = /\b(certificado_data|certificado_password|cert_password_encrypted|certificado_path)\b/i;
 
 interface QueryBody {
   table: string;
@@ -27,11 +30,19 @@ interface QueryBody {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSupabaseAdmin(req);
+  if (auth.response) return auth.response;
+
   const body = await req.json() as QueryBody;
   const { table, select = '*', eq: eqFilters, neq: neqFilters, gte: gteFilters, order, limit } = body;
 
   if (!table || !ALLOWED_TABLES.has(table)) {
     return NextResponse.json({ error: `Tabla no permitida: ${table}` }, { status: 403 });
+  }
+  if (!/^[\w\s,()*]+$/.test(select)
+    || PRIVATE_COMPANY_COLUMNS.test(select)
+    || /\bcompanies\s*\(\s*\*\s*\)/i.test(select)) {
+    return NextResponse.json({ error: 'Selección de columnas inválida' }, { status: 400 });
   }
 
   const supabase = createServiceClient();
@@ -57,5 +68,8 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: `[${error.code}] ${error.message}` }, { status: 500 });
   }
-  return NextResponse.json(data ?? []);
+  const response = table === 'companies'
+    ? (data ?? []).map(removePrivateCompanyFields)
+    : (data ?? []);
+  return NextResponse.json(response);
 }

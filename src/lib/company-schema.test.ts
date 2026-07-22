@@ -5,7 +5,7 @@ import {
   buildLegacyCompanyInsertPayload,
   normalizeCompanyAmbiente,
   normalizeCompanyEstado,
-} from './company-schema.ts';
+} from './company-schema';
 
 test('buildLegacyCompanyInsertPayload omits modern-only company columns', () => {
   const payload = buildLegacyCompanyInsertPayload(

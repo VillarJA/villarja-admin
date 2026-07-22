@@ -4,9 +4,20 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@/components/Icons';
 import { LogoFull } from '@/components/layout/Logo';
-import { adminApi } from '@/lib/api';
-import { setToken, setStoredUser, isAuthenticated } from '@/lib/auth';
+import { removeToken, setToken, setStoredUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+
+function persistAdminSession(
+  token: string,
+  user: { email: string; name: string },
+  remember: boolean,
+): void {
+  setToken(token);
+  setStoredUser(user);
+  const maxAge = remember ? `; max-age=${60 * 60 * 24 * 7}` : '';
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `vja_admin_token=${token}; path=/${maxAge}; SameSite=Strict${secure}`;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,48 +29,64 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isAuthenticated()) router.replace('/admin/dashboard');
-  }, [router]);
+    async function redirectAuthenticatedAdmin() {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user.app_metadata?.role === 'admin') {
+        const user = data.session.user;
+        persistAdminSession(data.session.access_token, {
+          email: user.email ?? '',
+          name: (user.user_metadata?.name as string) ?? user.email ?? '',
+        }, remember);
+        router.replace('/admin/dashboard');
+      } else {
+        removeToken();
+        document.cookie = 'vja_admin_token=; path=/; max-age=0';
+      }
+    }
+
+    void redirectAuthenticatedAdmin();
+  }, [remember, router]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user.app_metadata?.role !== 'admin') return;
+      persistAdminSession(session.access_token, {
+        email: session.user.email ?? '',
+        name: (session.user.user_metadata?.name as string) ?? session.user.email ?? '',
+      }, remember);
+    });
+    return () => subscription.unsubscribe();
+  }, [remember]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      let token: string;
-      let user: { email: string; name: string };
-
-      if (supabase) {
-        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password: pw });
-        if (authError || !data.session) {
-          throw new Error(authError?.message || 'invalid_credentials');
-        }
-        token = data.session.access_token;
-        user = { email: data.user.email ?? email, name: (data.user.user_metadata?.name as string) ?? email };
-      } else {
-        const data = await adminApi.login(email, pw);
-        token = data.token;
-        user = data.user;
+      if (!supabase) {
+        throw new Error('supabase_not_configured');
       }
 
-      setToken(token);
-      setStoredUser(user);
-      const maxAge = remember ? `; max-age=${60 * 60 * 24 * 7}` : '';
-      document.cookie = `vja_admin_token=${token}; path=/${maxAge}; SameSite=Strict`;
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password: pw });
+      if (authError || !data.session) {
+        throw new Error(authError?.message || 'invalid_credentials');
+      }
+      if (data.user.app_metadata?.role !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error('not_admin');
+      }
+      const token = data.session.access_token;
+      const user = { email: data.user.email ?? email, name: (data.user.user_metadata?.name as string) ?? email };
+
+      persistAdminSession(token, user, remember);
       router.push('/admin/dashboard');
     } catch {
       setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const demoLogin = () => {
-    const fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AdmlsbGFyamEuY29tIiwiZXhwIjo5OTk5OTk5OTk5fQ.demo';
-    setToken(fakeToken);
-    setStoredUser({ email: 'demo@villarja.com', name: 'Demo' });
-    document.cookie = `vja_admin_token=${fakeToken}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict`;
-    router.push('/admin/dashboard');
   };
 
   return (
@@ -155,15 +182,6 @@ export default function LoginPage() {
 
           <button className="btn primary btn-block" type="submit" disabled={loading}>
             {loading ? 'Verificando…' : 'Entrar al portal'}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-block"
-            style={{ marginTop: 10 }}
-            onClick={demoLogin}
-          >
-            Entrar en modo demo
           </button>
 
           <div className="login-foot">

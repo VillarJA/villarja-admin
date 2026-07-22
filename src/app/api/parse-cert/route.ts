@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as forge from 'node-forge';
+import { requireSupabaseAdmin } from '@/lib/admin-session';
+
+const MAX_CERTIFICATE_BYTES = 2 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSupabaseAdmin(req);
+  if (auth.response) return auth.response;
+
   const formData = await req.formData();
   const file = formData.get('cert') as File | null;
   const password = (formData.get('password') as string | null) ?? '';
 
   if (!file) return NextResponse.json({ error: 'Archivo requerido' }, { status: 400 });
+  if (file.size === 0 || file.size > MAX_CERTIFICATE_BYTES) {
+    return NextResponse.json({ error: 'El certificado debe pesar entre 1 byte y 2 MB' }, { status: 413 });
+  }
+  if (!/\.(p12|pfx)$/i.test(file.name)) {
+    return NextResponse.json({ error: 'Solo se aceptan certificados .p12 o .pfx' }, { status: 415 });
+  }
 
   const buffer = Buffer.from(await file.arrayBuffer());
 

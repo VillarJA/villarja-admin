@@ -28,7 +28,7 @@ export function isAuthenticated(): boolean {
     const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
     return decoded.exp ? decoded.exp * 1000 > Date.now() : true;
   } catch {
-    return !!token;
+    return false;
   }
 }
 

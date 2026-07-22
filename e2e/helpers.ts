@@ -1,9 +1,21 @@
 import { Page } from '@playwright/test';
 
-/** Log in via demo mode (no real credentials required). */
-export async function demoLogin(page: Page) {
+export const hasE2EAdminCredentials = Boolean(
+  process.env.E2E_SUPABASE_EMAIL && process.env.E2E_SUPABASE_PASSWORD,
+);
+
+/** Log in with an actual Supabase administrator account supplied by the test environment. */
+export async function loginAsAdmin(page: Page) {
+  const email = process.env.E2E_SUPABASE_EMAIL;
+  const password = process.env.E2E_SUPABASE_PASSWORD;
+  if (!email || !password) {
+    throw new Error('E2E_SUPABASE_EMAIL y E2E_SUPABASE_PASSWORD son requeridos para pruebas autenticadas');
+  }
+
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Entrar en modo demo' }).click();
+  await page.fill('input[type="email"]', email);
+  await page.fill('input[type="password"]', password);
+  await page.getByRole('button', { name: 'Entrar al portal' }).click();
   await page.waitForURL('/admin/dashboard');
 }
 

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase-server';
+import { requireSupabaseAdmin } from '@/lib/admin-session';
+import { recordAdminAudit } from '@/lib/admin-audit';
 
 const ECF_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ecf.villarja.com';
 
@@ -8,6 +10,9 @@ function apiKey(req: NextRequest): string | null {
 }
 
 export async function GET(req: NextRequest) {
+  const auth = await requireSupabaseAdmin(req);
+  if (auth.response) return auth.response;
+
   const key = apiKey(req);
   if (!key) return NextResponse.json({ error: 'API key requerida' }, { status: 400 });
 
@@ -26,6 +31,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireSupabaseAdmin(req);
+  if (auth.response) return auth.response;
+
   const key = apiKey(req);
   if (!key) return NextResponse.json({ error: 'API key requerida' }, { status: 400 });
 
@@ -53,6 +61,14 @@ export async function POST(req: NextRequest) {
             .eq('api_key', key)
             .limit(1);
           if (rows?.[0]?.id) {
+            try {
+              await recordAdminAudit(req, auth.user, 'Actualizó progreso de certificación', rows[0].id);
+            } catch (auditError) {
+              return NextResponse.json(
+                { error: auditError instanceof Error ? auditError.message : 'No se pudo registrar auditoría' },
+                { status: 500 },
+              );
+            }
             await supabase
               .from('companies')
               .update({ certification_status: newStatus })

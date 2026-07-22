@@ -694,7 +694,7 @@ export function CertificacionTab({ company, onOpenTestSet, onCertStatusChange }:
           if (firstPending) setSelectedPaso(firstPending.paso);
         }
       } catch {
-        // keep defaults — API not available in demo mode
+        // Keep defaults when the certification API is temporarily unavailable.
       } finally {
         if (!cancelled) setLoading(false);
       }
